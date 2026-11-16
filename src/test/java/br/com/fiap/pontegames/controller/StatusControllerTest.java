@@ -20,6 +20,18 @@ class StatusControllerTest {
 	private MockMvc mockMvc;
 
 	@Test
+	void documentacaoAbertaSemToken() throws Exception {
+		mockMvc.perform(get("/v3/api-docs"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.info.title").value("Ponte Games API"))
+				.andExpect(jsonPath("$.paths['/api/auth/login']").exists())
+				.andExpect(jsonPath("$.paths['/api/descartes/{id}/validacao']").exists())
+				.andExpect(jsonPath("$.paths['/api/notificacoes']").exists());
+		mockMvc.perform(get("/swagger-ui/index.html"))
+				.andExpect(status().isOk());
+	}
+
+	@Test
 	void statusRetornaOk() throws Exception {
 		mockMvc.perform(get("/api/status"))
 				.andExpect(status().isOk())

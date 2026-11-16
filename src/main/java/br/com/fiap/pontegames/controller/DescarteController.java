@@ -5,6 +5,8 @@ import br.com.fiap.pontegames.dto.DescarteResponse;
 import br.com.fiap.pontegames.dto.PaginaResponse;
 import br.com.fiap.pontegames.dto.ValidacaoDescarteRequest;
 import br.com.fiap.pontegames.service.DescarteService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/descartes")
+@Tag(name = "Descartes", description = "Descarte do cidadão, parecer da foto e validação do gestor.")
 public class DescarteController {
 
 	private final DescarteService descarteService;
@@ -51,6 +54,7 @@ public class DescarteController {
 	}
 
 	@PostMapping("/{id}/validacao")
+	@Operation(summary = "Gestor ou admin valida ou rejeita um descarte pendente. VALIDADO_IA credita o XP.")
 	public DescarteResponse validar(@PathVariable Long id, @Valid @RequestBody ValidacaoDescarteRequest request) {
 		return descarteService.validar(id, request.status());
 	}

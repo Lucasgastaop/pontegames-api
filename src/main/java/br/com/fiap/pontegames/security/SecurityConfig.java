@@ -48,7 +48,14 @@ public class SecurityConfig {
 						.accessDeniedHandler((request, response, accessDeniedException) -> escrever(
 								response, objectMapper, HttpStatus.FORBIDDEN, "Você não tem permissão para esta operação.")))
 				.authorizeHttpRequests(auth -> auth
-						.requestMatchers("/api/status", "/api/auth/**").permitAll()
+						.requestMatchers(
+								"/api/status",
+								"/api/auth/**",
+								"/swagger-ui.html",
+								"/swagger-ui/**",
+								"/v3/api-docs",
+								"/v3/api-docs.yaml",
+								"/v3/api-docs/**").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/usuarios/me").authenticated()
 						.requestMatchers(HttpMethod.GET, "/api/usuarios", "/api/usuarios/**").hasAnyRole("GESTOR", "ADMIN")
 						.requestMatchers("/api/usuarios", "/api/usuarios/**").hasRole("ADMIN")

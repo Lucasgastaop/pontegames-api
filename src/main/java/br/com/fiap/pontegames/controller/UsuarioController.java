@@ -5,6 +5,7 @@ import br.com.fiap.pontegames.dto.UsuarioAtualizacaoRequest;
 import br.com.fiap.pontegames.dto.UsuarioRequest;
 import br.com.fiap.pontegames.dto.UsuarioResponse;
 import br.com.fiap.pontegames.service.UsuarioService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/usuarios")
+@Tag(name = "Usuários", description = "Perfil do cidadão e cadastro administrativo.")
 public class UsuarioController {
 
 	private final UsuarioService usuarioService;

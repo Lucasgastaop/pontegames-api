@@ -4,6 +4,7 @@ import br.com.fiap.pontegames.dto.PaginaResponse;
 import br.com.fiap.pontegames.dto.PontoColetaRequest;
 import br.com.fiap.pontegames.dto.PontoColetaResponse;
 import br.com.fiap.pontegames.service.PontoColetaService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/pontos-coleta")
+@Tag(name = "Ecopontos", description = "Pontos de coleta. Escrita de gestor ou admin.")
 public class PontoColetaController {
 
 	private final PontoColetaService pontoColetaService;

@@ -1,0 +1,21 @@
+Global Solution 2026/2 — CitizenTech
+Disciplina: Java Advanced
+Projeto: Ponte Games — Gamificação e Logística Reversa para Cidades Sustentáveis
+Instituição: FIAP
+Curso: Análise e Desenvolvimento de Sistemas
+
+Integrantes
+1. Nome completo: Lucas Silva Gastão Pinheiro
+   RM: 563960
+   Turma: 2TDSPX
+
+2. Nome completo: Geovanne Coneglian Passos
+   RM: 562673
+   Turma: 2TDSPX
+
+3. Nome completo: Guilherme Soares de Almeida
+   RM: 563143
+   Turma: 2TDSPX
+
+Repositório: https://github.com/Lucasgastaop/pontegames-api
+Vídeo pitch: preencher com o link público (YouTube ou Drive) antes de enviar o .zip

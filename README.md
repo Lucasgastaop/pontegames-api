@@ -4,6 +4,12 @@ API backend da plataforma Ponte Games (FIAP GS 2026/2 — CitizenTech). O cidad�
 
 O modelo JPA usa as tabelas Oracle da entrega de database e não cria nem altera o schema (`ddl-auto: none`). O CRUD paginado responde em `/api`, com validação, erro padronizado, login JWT e as regras de XP do descarte. A foto do descarte passa pelo Spring AI. O resultado da validação segue por RabbitMQ até o aviso do cidadão.
 
+Esta é a API consumida pelo app Mobile da disciplina. Repositório: https://github.com/Lucasgastaop/pontegames-api
+
+## Grupo
+
+Turma 2TDSPX. Lucas Silva Gastão Pinheiro, RM 563960. Geovanne Coneglian Passos, RM 562673. Guilherme Soares de Almeida, RM 563143.
+
 ## Endpoints
 
 As listas aceitam `page`, `size` e `sort`. A página começa em 0. O tamanho padrão é 10 e o máximo é 50.
@@ -28,7 +34,7 @@ No Oracle, rode `db/oracle-senha.sql` antes de subir. A coluna `ds_senha` não e
 | Gestora | `elena.duarte@pontegames.test` | `senha123` |
 | Admin | `fabio.nunes@pontegames.test` | `senha123` |
 
-`POST /api/auth/login` devolve o token. As outras rotas, fora `POST /api/auth/registrar` e `GET /api/status`, exigem `Authorization: Bearer <token>`.
+`POST /api/auth/login` devolve o token. As outras rotas, fora `POST /api/auth/registrar`, `GET /api/status` e o Swagger, exigem `Authorization: Bearer <token>`.
 
 - Cidadão consulta ecopontos e tipos, registra descarte só para si, vê o próprio perfil em `GET /api/usuarios/me` e os próprios avisos em `GET /api/notificacoes`. O cadastro público nasce sempre cidadão.
 - Gestora ou admin cadastram ecoponto e tipo de resíduo e listam usuários.
@@ -42,9 +48,9 @@ No Oracle, rode `db/oracle-parecer.sql` antes de subir. As colunas do parecer n�
 
 Quando o descarte traz `fotoUrl`, o Spring AI (OpenAI, modelo `gpt-4o-mini`) olha a imagem e o tipo declarado. A resposta do descarte ganha `parecer` (`COMPATIVEL`, `INCOMPATIVEL` ou `INCONCLUSIVO`) e `mensagemParecer`, uma frase para o cidadão. Sem foto, os dois campos ficam vazios. Se o modelo falhar, o descarte é gravado mesmo assim, com parecer inconclusivo. Esse parecer não muda o status e não credita XP: a validação continua com gestor ou admin.
 
-## Aviso assíncrono
+## Requisito 5 — opção A (RabbitMQ)
 
-A parte distribuída é a opção A: RabbitMQ. No Oracle, rode `db/oracle-notificacao.sql` antes de subir. A tabela do aviso não existia na entrega de database.
+A parte distribuída escolhida é a opção A: um evento publicado e consumido no RabbitMQ. No Oracle, rode `db/oracle-notificacao.sql` antes de subir. A tabela do aviso não existia na entrega de database.
 
 Suba o broker (a porta 15672 abre o painel em http://localhost:15672, usuário `guest`, senha `guest`):
 
@@ -64,9 +70,21 @@ Validação, conflito e recurso inexistente usam o mesmo corpo. `campos` só vem
 {"status":400,"erro":"Requisição inválida","mensagem":"Revise os campos informados.","campos":[{"campo":"nome","mensagem":"Nome é obrigatório."}]}
 ```
 
+## Swagger
+
+Com a API no ar, a documentação interativa fica em http://localhost:8080/swagger-ui.html. O contrato OpenAPI fica em http://localhost:8080/v3/api-docs. Essas rotas são públicas. Para chamar o resto, entre com um usuário de teste, copie o `token` e cole em Authorize. O Swagger envia `Authorization: Bearer`.
+
+## Deploy
+
+Não há deploy público. A avaliação sobe a API na máquina local com os passos abaixo.
+
+## Declaração de uso de IA
+
+O parecer da foto chama a API da OpenAI, modelo `gpt-4o-mini`, pelo Spring AI. A chave fica só na variável `OPENAI_API_KEY` e não entra no repositório. O desenvolvimento do código teve apoio do Cursor. O grupo revisou o que está no repositório e responde pela solução.
+
 ## Como rodar
 
-JDK 21 ou superior e Maven 3.9+. As tabelas precisam existir no Oracle. Defina a conexão e suba a API:
+JDK 21 ou superior e Maven 3.9+. No Oracle, com as tabelas da entrega de database já criadas, rode nesta ordem `db/oracle-senha.sql`, `db/oracle-parecer.sql` e `db/oracle-notificacao.sql`. Suba o RabbitMQ com o comando da seção do requisito 5. Defina a conexão e a chave, e suba a API:
 
 ```text
 $env:ORACLE_URL="jdbc:oracle:thin:@localhost:1521/FREEPDB1"

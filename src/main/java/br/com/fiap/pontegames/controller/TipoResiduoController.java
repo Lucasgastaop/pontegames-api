@@ -4,6 +4,7 @@ import br.com.fiap.pontegames.dto.PaginaResponse;
 import br.com.fiap.pontegames.dto.TipoResiduoRequest;
 import br.com.fiap.pontegames.dto.TipoResiduoResponse;
 import br.com.fiap.pontegames.service.TipoResiduoService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/tipos-residuo")
+@Tag(name = "Tipos de resíduo", description = "Óleo, eletrônico e pilhas, com XP por quilo.")
 public class TipoResiduoController {
 
 	private final TipoResiduoService tipoResiduoService;
