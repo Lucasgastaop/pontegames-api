@@ -2,7 +2,7 @@
 
 API backend da plataforma Ponte Games (FIAP GS 2026/2 — CitizenTech). O cidadão entrega óleo de cozinha, lixo eletrônico ou pilhas num ecoponto e o descarte validado vira XP.
 
-O modelo JPA usa as tabelas Oracle da entrega de database e não cria nem altera o schema (`ddl-auto: none`). O CRUD paginado responde em `/api`, com validação, erro padronizado e login JWT. Regras de XP, IA e mensageria entram nos commits seguintes.
+O modelo JPA usa as tabelas Oracle da entrega de database e não cria nem altera o schema (`ddl-auto: none`). O CRUD paginado responde em `/api`, com validação, erro padronizado, login JWT e as regras de XP do descarte. IA e mensageria entram nos commits seguintes.
 
 ## Endpoints
 
@@ -32,6 +32,8 @@ No Oracle, rode `db/oracle-senha.sql` antes de subir. A coluna `ds_senha` não e
 - Cidadão consulta ecopontos e tipos, registra descarte só para si e vê o próprio perfil em `GET /api/usuarios/me`. O cadastro público nasce sempre cidadão.
 - Gestora ou admin cadastram ecoponto e tipo de resíduo e listam usuários.
 - Só o admin cria, altera e apaga usuários.
+
+O descarte nasce `PENDENTE`. O XP da missão é peso vezes XP por kg e só entra no saldo quando um gestor ou admin envia `POST /api/descartes/{id}/validacao` com `VALIDADO_IA`. Rejeitado não credita. Apagar um descarte validado estorna o XP. Ecoponto inativo, teto diário (óleo 5 kg, eletrônico 10 kg, pilha 1 kg) e repetição do mesmo peso no dia respondem 409. No Oracle os gatilhos continuam creditando o saldo; a API não soma de novo.
 
 ## Erros
 

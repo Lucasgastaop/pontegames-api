@@ -3,6 +3,7 @@ package br.com.fiap.pontegames.controller;
 import br.com.fiap.pontegames.dto.DescarteRequest;
 import br.com.fiap.pontegames.dto.DescarteResponse;
 import br.com.fiap.pontegames.dto.PaginaResponse;
+import br.com.fiap.pontegames.dto.ValidacaoDescarteRequest;
 import br.com.fiap.pontegames.service.DescarteService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
@@ -47,6 +48,11 @@ public class DescarteController {
 	@PutMapping("/{id}")
 	public DescarteResponse atualizar(@PathVariable Long id, @Valid @RequestBody DescarteRequest request) {
 		return descarteService.atualizar(id, request);
+	}
+
+	@PostMapping("/{id}/validacao")
+	public DescarteResponse validar(@PathVariable Long id, @Valid @RequestBody ValidacaoDescarteRequest request) {
+		return descarteService.validar(id, request.status());
 	}
 
 	@DeleteMapping("/{id}")

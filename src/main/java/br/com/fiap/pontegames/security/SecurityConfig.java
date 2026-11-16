@@ -56,6 +56,7 @@ public class SecurityConfig {
 						.requestMatchers("/api/pontos-coleta", "/api/pontos-coleta/**").hasAnyRole("GESTOR", "ADMIN")
 						.requestMatchers(HttpMethod.GET, "/api/tipos-residuo", "/api/tipos-residuo/**").authenticated()
 						.requestMatchers("/api/tipos-residuo", "/api/tipos-residuo/**").hasAnyRole("GESTOR", "ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/descartes/*/validacao").hasAnyRole("GESTOR", "ADMIN")
 						.requestMatchers("/api/descartes", "/api/descartes/**").authenticated()
 						.anyRequest().authenticated())
 				.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
