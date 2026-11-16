@@ -2,7 +2,20 @@
 
 API backend da plataforma Ponte Games (FIAP GS 2026/2 — CitizenTech). O cidadão entrega óleo de cozinha, lixo eletrônico ou pilhas num ecoponto e o descarte validado vira XP.
 
-O modelo JPA usa as tabelas Oracle da entrega de database e não cria nem altera o schema (`ddl-auto: none`). Segurança, regras de XP, IA e mensageria entram nos commits seguintes.
+O modelo JPA usa as tabelas Oracle da entrega de database e não cria nem altera o schema (`ddl-auto: none`). O CRUD paginado já responde em `/api`. Segurança, regras de XP, IA e mensageria entram nos commits seguintes.
+
+## Endpoints
+
+As listas aceitam `page`, `size` e `sort`. A página começa em 0. O tamanho padrão é 10 e o máximo é 50.
+
+| Recurso | Caminho |
+| --- | --- |
+| Usuários | `/api/usuarios` |
+| Tipos de resíduo | `/api/tipos-residuo` |
+| Ecopontos | `/api/pontos-coleta` |
+| Descartes | `/api/descartes` |
+
+Cada um tem `GET` da lista, `GET /{id}`, `POST`, `PUT /{id}` e `DELETE /{id}`. Nível, XP e status do descarte não entram no corpo de escrita: o usuário nasce no nível 1 com XP 0, e o descarte nasce `PENDENTE`.
 
 ## Como rodar
 
