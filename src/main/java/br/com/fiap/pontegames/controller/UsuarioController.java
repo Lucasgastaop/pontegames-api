@@ -4,6 +4,7 @@ import br.com.fiap.pontegames.dto.PaginaResponse;
 import br.com.fiap.pontegames.dto.UsuarioRequest;
 import br.com.fiap.pontegames.dto.UsuarioResponse;
 import br.com.fiap.pontegames.service.UsuarioService;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -39,12 +40,12 @@ public class UsuarioController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	public UsuarioResponse criar(@RequestBody UsuarioRequest request) {
+	public UsuarioResponse criar(@Valid @RequestBody UsuarioRequest request) {
 		return usuarioService.criar(request);
 	}
 
 	@PutMapping("/{id}")
-	public UsuarioResponse atualizar(@PathVariable Long id, @RequestBody UsuarioRequest request) {
+	public UsuarioResponse atualizar(@PathVariable Long id, @Valid @RequestBody UsuarioRequest request) {
 		return usuarioService.atualizar(id, request);
 	}
 

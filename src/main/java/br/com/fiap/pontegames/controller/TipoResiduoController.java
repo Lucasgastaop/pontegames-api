@@ -4,6 +4,7 @@ import br.com.fiap.pontegames.dto.PaginaResponse;
 import br.com.fiap.pontegames.dto.TipoResiduoRequest;
 import br.com.fiap.pontegames.dto.TipoResiduoResponse;
 import br.com.fiap.pontegames.service.TipoResiduoService;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -39,12 +40,12 @@ public class TipoResiduoController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	public TipoResiduoResponse criar(@RequestBody TipoResiduoRequest request) {
+	public TipoResiduoResponse criar(@Valid @RequestBody TipoResiduoRequest request) {
 		return tipoResiduoService.criar(request);
 	}
 
 	@PutMapping("/{id}")
-	public TipoResiduoResponse atualizar(@PathVariable Long id, @RequestBody TipoResiduoRequest request) {
+	public TipoResiduoResponse atualizar(@PathVariable Long id, @Valid @RequestBody TipoResiduoRequest request) {
 		return tipoResiduoService.atualizar(id, request);
 	}
 

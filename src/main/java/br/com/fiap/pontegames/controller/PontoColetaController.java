@@ -4,6 +4,7 @@ import br.com.fiap.pontegames.dto.PaginaResponse;
 import br.com.fiap.pontegames.dto.PontoColetaRequest;
 import br.com.fiap.pontegames.dto.PontoColetaResponse;
 import br.com.fiap.pontegames.service.PontoColetaService;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -39,12 +40,12 @@ public class PontoColetaController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	public PontoColetaResponse criar(@RequestBody PontoColetaRequest request) {
+	public PontoColetaResponse criar(@Valid @RequestBody PontoColetaRequest request) {
 		return pontoColetaService.criar(request);
 	}
 
 	@PutMapping("/{id}")
-	public PontoColetaResponse atualizar(@PathVariable Long id, @RequestBody PontoColetaRequest request) {
+	public PontoColetaResponse atualizar(@PathVariable Long id, @Valid @RequestBody PontoColetaRequest request) {
 		return pontoColetaService.atualizar(id, request);
 	}
 

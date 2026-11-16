@@ -4,6 +4,7 @@ import br.com.fiap.pontegames.dto.DescarteRequest;
 import br.com.fiap.pontegames.dto.DescarteResponse;
 import br.com.fiap.pontegames.dto.PaginaResponse;
 import br.com.fiap.pontegames.service.DescarteService;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
@@ -39,12 +40,12 @@ public class DescarteController {
 
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
-	public DescarteResponse criar(@RequestBody DescarteRequest request) {
+	public DescarteResponse criar(@Valid @RequestBody DescarteRequest request) {
 		return descarteService.criar(request);
 	}
 
 	@PutMapping("/{id}")
-	public DescarteResponse atualizar(@PathVariable Long id, @RequestBody DescarteRequest request) {
+	public DescarteResponse atualizar(@PathVariable Long id, @Valid @RequestBody DescarteRequest request) {
 		return descarteService.atualizar(id, request);
 	}
 
