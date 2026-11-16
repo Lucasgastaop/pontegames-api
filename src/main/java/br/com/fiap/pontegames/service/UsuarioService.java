@@ -1,14 +1,18 @@
 package br.com.fiap.pontegames.service;
 
 import br.com.fiap.pontegames.dto.PaginaResponse;
+import br.com.fiap.pontegames.dto.RegistroRequest;
+import br.com.fiap.pontegames.dto.UsuarioAtualizacaoRequest;
 import br.com.fiap.pontegames.dto.UsuarioRequest;
 import br.com.fiap.pontegames.dto.UsuarioResponse;
 import br.com.fiap.pontegames.model.TipoUsuario;
 import br.com.fiap.pontegames.model.Usuario;
 import br.com.fiap.pontegames.repository.UsuarioRepository;
+import br.com.fiap.pontegames.security.AutenticacaoAtual;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -17,9 +21,17 @@ import org.springframework.web.server.ResponseStatusException;
 public class UsuarioService {
 
 	private final UsuarioRepository usuarioRepository;
+	private final PasswordEncoder passwordEncoder;
+	private final AutenticacaoAtual autenticacaoAtual;
 
-	public UsuarioService(UsuarioRepository usuarioRepository) {
+	public UsuarioService(
+			UsuarioRepository usuarioRepository,
+			PasswordEncoder passwordEncoder,
+			AutenticacaoAtual autenticacaoAtual
+	) {
 		this.usuarioRepository = usuarioRepository;
+		this.passwordEncoder = passwordEncoder;
+		this.autenticacaoAtual = autenticacaoAtual;
 	}
 
 	@Transactional(readOnly = true)
@@ -32,19 +44,37 @@ public class UsuarioService {
 		return paraResponse(buscarEntidade(id));
 	}
 
+	@Transactional(readOnly = true)
+	public UsuarioResponse eu() {
+		return paraResponse(buscarEntidade(autenticacaoAtual.exigir().id()));
+	}
+
 	@Transactional
-	public UsuarioResponse criar(UsuarioRequest request) {
+	public UsuarioResponse registrarCidadao(RegistroRequest request) {
 		garantirUnicidade(request.email(), request.cpf(), null);
 		Usuario usuario = new Usuario();
-		aplicar(usuario, request);
+		preencher(usuario, request.nome(), request.email(), request.cpf(), TipoUsuario.CIDADAO);
+		usuario.setSenha(passwordEncoder.encode(request.senha()));
 		return paraResponse(usuarioRepository.save(usuario));
 	}
 
 	@Transactional
-	public UsuarioResponse atualizar(Long id, UsuarioRequest request) {
+	public UsuarioResponse criar(UsuarioRequest request) {
+		garantirUnicidade(request.email(), request.cpf(), null);
+		Usuario usuario = new Usuario();
+		preencher(usuario, request.nome(), request.email(), request.cpf(), request.tipo());
+		usuario.setSenha(passwordEncoder.encode(request.senha()));
+		return paraResponse(usuarioRepository.save(usuario));
+	}
+
+	@Transactional
+	public UsuarioResponse atualizar(Long id, UsuarioAtualizacaoRequest request) {
 		Usuario usuario = buscarEntidade(id);
 		garantirUnicidade(request.email(), request.cpf(), id);
-		aplicar(usuario, request);
+		preencher(usuario, request.nome(), request.email(), request.cpf(), request.tipo());
+		if (request.senha() != null && !request.senha().isBlank()) {
+			usuario.setSenha(passwordEncoder.encode(request.senha().trim()));
+		}
 		return paraResponse(usuarioRepository.save(usuario));
 	}
 
@@ -59,11 +89,11 @@ public class UsuarioService {
 		}
 	}
 
-	private void aplicar(Usuario usuario, UsuarioRequest request) {
-		usuario.setNome(limpar(request.nome()));
-		usuario.setEmail(limpar(request.email()));
-		usuario.setCpf(limpar(request.cpf()));
-		usuario.setTipo(request.tipo() == null ? TipoUsuario.CIDADAO : request.tipo());
+	private void preencher(Usuario usuario, String nome, String email, String cpf, TipoUsuario tipo) {
+		usuario.setNome(limpar(nome));
+		usuario.setEmail(limpar(email));
+		usuario.setCpf(limpar(cpf));
+		usuario.setTipo(tipo == null ? TipoUsuario.CIDADAO : tipo);
 	}
 
 	private void garantirUnicidade(String email, String cpf, Long idIgnorado) {

@@ -15,5 +15,10 @@ spring:
         default-page-size: 10
         max-page-size: 50
 
+pontegames:
+  jwt:
+    segredo: ${JWT_SECRET:pontegames-segredo-local-com-pelo-menos-32-bytes}
+    expiracao-minutos: 120
+
 server:
   port: 8080

@@ -20,6 +20,10 @@ public record UsuarioRequest(
 		@Pattern(regexp = "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}", message = "CPF deve estar no formato 000.000.000-00.")
 		String cpf,
 
-		TipoUsuario tipo
+		TipoUsuario tipo,
+
+		@NotBlank(message = "Senha é obrigatória.")
+		@Size(min = 6, max = 72, message = "Senha deve ter de 6 a 72 caracteres.")
+		String senha
 ) {
 }

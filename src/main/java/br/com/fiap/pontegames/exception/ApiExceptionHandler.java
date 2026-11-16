@@ -74,6 +74,8 @@ public class ApiExceptionHandler {
 	private String titulo(HttpStatus status) {
 		return switch (status) {
 			case BAD_REQUEST -> "Requisição inválida";
+			case UNAUTHORIZED -> "Não autenticado";
+			case FORBIDDEN -> "Acesso negado";
 			case NOT_FOUND -> "Não encontrado";
 			case CONFLICT -> "Conflito";
 			case INTERNAL_SERVER_ERROR -> "Erro interno";

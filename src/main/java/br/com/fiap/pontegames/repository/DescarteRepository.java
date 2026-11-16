@@ -18,4 +18,7 @@ public interface DescarteRepository extends JpaRepository<Descarte, Long> {
 	@Override
 	Optional<Descarte> findById(Long id);
 
+	@EntityGraph(attributePaths = {"usuario", "pontoColeta", "tipoResiduo"})
+	Page<Descarte> findByUsuario_Id(Long usuarioId, Pageable pageable);
+
 }

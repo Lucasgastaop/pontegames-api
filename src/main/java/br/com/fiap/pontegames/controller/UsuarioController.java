@@ -1,6 +1,7 @@
 package br.com.fiap.pontegames.controller;
 
 import br.com.fiap.pontegames.dto.PaginaResponse;
+import br.com.fiap.pontegames.dto.UsuarioAtualizacaoRequest;
 import br.com.fiap.pontegames.dto.UsuarioRequest;
 import br.com.fiap.pontegames.dto.UsuarioResponse;
 import br.com.fiap.pontegames.service.UsuarioService;
@@ -33,6 +34,11 @@ public class UsuarioController {
 		return usuarioService.listar(pageable);
 	}
 
+	@GetMapping("/me")
+	public UsuarioResponse eu() {
+		return usuarioService.eu();
+	}
+
 	@GetMapping("/{id}")
 	public UsuarioResponse buscar(@PathVariable Long id) {
 		return usuarioService.buscar(id);
@@ -45,7 +51,7 @@ public class UsuarioController {
 	}
 
 	@PutMapping("/{id}")
-	public UsuarioResponse atualizar(@PathVariable Long id, @Valid @RequestBody UsuarioRequest request) {
+	public UsuarioResponse atualizar(@PathVariable Long id, @Valid @RequestBody UsuarioAtualizacaoRequest request) {
 		return usuarioService.atualizar(id, request);
 	}
 

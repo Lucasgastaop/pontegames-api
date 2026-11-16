@@ -31,6 +31,9 @@ public class Usuario {
 	@Column(name = "nr_cpf", nullable = false, unique = true, length = 14)
 	private String cpf;
 
+	@Column(name = "ds_senha", length = 100)
+	private String senha;
+
 	@Column(name = "nr_nivel", nullable = false)
 	private Integer nivel = 1;
 
@@ -71,6 +74,14 @@ public class Usuario {
 
 	public void setCpf(String cpf) {
 		this.cpf = cpf;
+	}
+
+	public String getSenha() {
+		return senha;
+	}
+
+	public void setSenha(String senha) {
+		this.senha = senha;
 	}
 
 	public Integer getNivel() {

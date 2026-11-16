@@ -1,11 +1,20 @@
 package br.com.fiap.pontegames.controller;
 
+import br.com.fiap.pontegames.model.TipoUsuario;
+import br.com.fiap.pontegames.model.Usuario;
+import br.com.fiap.pontegames.repository.UsuarioRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -15,14 +24,46 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 class ValidacaoApiTest {
 
 	@Autowired
 	private MockMvc mockMvc;
 
+	@Autowired
+	private UsuarioRepository usuarioRepository;
+
+	@Autowired
+	private PasswordEncoder passwordEncoder;
+
+	private String tokenAdmin;
+
+	@BeforeEach
+	void prepararAdmin() throws Exception {
+		usuarioRepository.findByEmail("admin.validacao@pontegames.test").orElseGet(() -> {
+			Usuario admin = new Usuario();
+			admin.setNome("Admin Validacao");
+			admin.setEmail("admin.validacao@pontegames.test");
+			admin.setCpf("999.999.008-98");
+			admin.setTipo(TipoUsuario.ADMIN);
+			admin.setSenha(passwordEncoder.encode("senha123"));
+			return usuarioRepository.saveAndFlush(admin);
+		});
+		MvcResult resultado = mockMvc.perform(post("/api/auth/login")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"email":"admin.validacao@pontegames.test","senha":"senha123"}
+								"""))
+				.andExpect(status().isOk())
+				.andReturn();
+		String corpo = resultado.getResponse().getContentAsString();
+		int inicio = corpo.indexOf("\"token\":\"") + 9;
+		tokenAdmin = corpo.substring(inicio, corpo.indexOf('"', inicio));
+	}
+
 	@Test
 	void usuarioSemNomeRetornaCamposInvalidos() throws Exception {
-		mockMvc.perform(post("/api/usuarios")
+		comoAdmin(post("/api/usuarios")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"email":"ana@pontegames.test","cpf":"000.000.001-01"}
@@ -37,7 +78,7 @@ class ValidacaoApiTest {
 
 	@Test
 	void cpfForaDoFormatoRetorna400() throws Exception {
-		mockMvc.perform(post("/api/usuarios")
+		comoAdmin(post("/api/usuarios")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"nome":"Ana Souza","email":"ana@pontegames.test","cpf":"00000000101"}
@@ -48,7 +89,7 @@ class ValidacaoApiTest {
 
 	@Test
 	void pesoZeroNaoCriaDescarte() throws Exception {
-		mockMvc.perform(post("/api/descartes")
+		comoAdmin(post("/api/descartes")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"usuarioId":1,"pontoId":1,"tipoResiduoId":1,"pesoKg":0}
@@ -59,7 +100,7 @@ class ValidacaoApiTest {
 
 	@Test
 	void jsonInvalidoRetorna400() throws Exception {
-		mockMvc.perform(post("/api/usuarios")
+		comoAdmin(post("/api/usuarios")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{"))
 				.andExpect(status().isBadRequest())
@@ -69,7 +110,7 @@ class ValidacaoApiTest {
 
 	@Test
 	void usuarioInexistenteUsaOMesmoFormato() throws Exception {
-		mockMvc.perform(get("/api/usuarios/999"))
+		comoAdmin(get("/api/usuarios/999"))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.status").value(404))
 				.andExpect(jsonPath("$.erro").value("Não encontrado"))
@@ -79,9 +120,13 @@ class ValidacaoApiTest {
 
 	@Test
 	void identificadorQueNaoENumeroRetorna400() throws Exception {
-		mockMvc.perform(get("/api/usuarios/abc"))
+		comoAdmin(get("/api/usuarios/abc"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.mensagem").value("Valor inválido para id."));
+	}
+
+	private ResultActions comoAdmin(MockHttpServletRequestBuilder builder) throws Exception {
+		return mockMvc.perform(builder.header("Authorization", "Bearer " + tokenAdmin));
 	}
 
 }

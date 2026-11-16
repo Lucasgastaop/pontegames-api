@@ -6,11 +6,14 @@ import br.com.fiap.pontegames.dto.PaginaResponse;
 import br.com.fiap.pontegames.model.Descarte;
 import br.com.fiap.pontegames.model.PontoColeta;
 import br.com.fiap.pontegames.model.TipoResiduo;
+import br.com.fiap.pontegames.model.TipoUsuario;
 import br.com.fiap.pontegames.model.Usuario;
 import br.com.fiap.pontegames.repository.DescarteRepository;
 import br.com.fiap.pontegames.repository.PontoColetaRepository;
 import br.com.fiap.pontegames.repository.TipoResiduoRepository;
 import br.com.fiap.pontegames.repository.UsuarioRepository;
+import br.com.fiap.pontegames.security.AutenticacaoAtual;
+import br.com.fiap.pontegames.security.UsuarioAutenticado;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -24,31 +27,41 @@ public class DescarteService {
 	private final UsuarioRepository usuarioRepository;
 	private final PontoColetaRepository pontoColetaRepository;
 	private final TipoResiduoRepository tipoResiduoRepository;
+	private final AutenticacaoAtual autenticacaoAtual;
 
 	public DescarteService(
 			DescarteRepository descarteRepository,
 			UsuarioRepository usuarioRepository,
 			PontoColetaRepository pontoColetaRepository,
-			TipoResiduoRepository tipoResiduoRepository
+			TipoResiduoRepository tipoResiduoRepository,
+			AutenticacaoAtual autenticacaoAtual
 	) {
 		this.descarteRepository = descarteRepository;
 		this.usuarioRepository = usuarioRepository;
 		this.pontoColetaRepository = pontoColetaRepository;
 		this.tipoResiduoRepository = tipoResiduoRepository;
+		this.autenticacaoAtual = autenticacaoAtual;
 	}
 
 	@Transactional(readOnly = true)
 	public PaginaResponse<DescarteResponse> listar(Pageable pageable) {
-		return PaginaResponse.de(descarteRepository.findAll(pageable).map(this::paraResponse));
+		UsuarioAutenticado atual = autenticacaoAtual.exigir();
+		var pagina = atual.tipo() == TipoUsuario.CIDADAO
+				? descarteRepository.findByUsuario_Id(atual.id(), pageable)
+				: descarteRepository.findAll(pageable);
+		return PaginaResponse.de(pagina.map(this::paraResponse));
 	}
 
 	@Transactional(readOnly = true)
 	public DescarteResponse buscar(Long id) {
-		return paraResponse(buscarEntidade(id));
+		Descarte descarte = buscarEntidade(id);
+		garantirProprioDescarte(descarte.getUsuario().getId());
+		return paraResponse(descarte);
 	}
 
 	@Transactional
 	public DescarteResponse criar(DescarteRequest request) {
+		garantirProprioDescarte(request.usuarioId());
 		Descarte descarte = new Descarte();
 		aplicar(descarte, request);
 		return paraResponse(descarteRepository.save(descarte));
@@ -57,6 +70,8 @@ public class DescarteService {
 	@Transactional
 	public DescarteResponse atualizar(Long id, DescarteRequest request) {
 		Descarte descarte = buscarEntidade(id);
+		garantirProprioDescarte(descarte.getUsuario().getId());
+		garantirProprioDescarte(request.usuarioId());
 		aplicar(descarte, request);
 		return paraResponse(descarteRepository.save(descarte));
 	}
@@ -64,7 +79,15 @@ public class DescarteService {
 	@Transactional
 	public void excluir(Long id) {
 		Descarte descarte = buscarEntidade(id);
+		garantirProprioDescarte(descarte.getUsuario().getId());
 		descarteRepository.delete(descarte);
+	}
+
+	private void garantirProprioDescarte(Long usuarioDoDescarte) {
+		UsuarioAutenticado atual = autenticacaoAtual.exigir();
+		if (atual.tipo() == TipoUsuario.CIDADAO && !atual.id().equals(usuarioDoDescarte)) {
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cidadão só acessa o próprio descarte.");
+		}
 	}
 
 	private void aplicar(Descarte descarte, DescarteRequest request) {
