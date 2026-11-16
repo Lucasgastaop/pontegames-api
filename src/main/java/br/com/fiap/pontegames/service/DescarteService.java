@@ -4,6 +4,7 @@ import br.com.fiap.pontegames.dto.DescarteRequest;
 import br.com.fiap.pontegames.dto.DescarteResponse;
 import br.com.fiap.pontegames.dto.PaginaResponse;
 import br.com.fiap.pontegames.model.Descarte;
+import br.com.fiap.pontegames.model.ParecerIa;
 import br.com.fiap.pontegames.model.PontoColeta;
 import br.com.fiap.pontegames.model.StatusValidacao;
 import br.com.fiap.pontegames.model.TipoResiduo;
@@ -16,6 +17,8 @@ import br.com.fiap.pontegames.repository.UsuarioRepository;
 import br.com.fiap.pontegames.security.AutenticacaoAtual;
 import br.com.fiap.pontegames.security.UsuarioAutenticado;
 import jakarta.persistence.EntityManager;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -31,8 +34,10 @@ import java.time.ZoneId;
 @Service
 public class DescarteService {
 
+	private static final Logger LOG = LoggerFactory.getLogger(DescarteService.class);
 	private static final ZoneId ZONA = ZoneId.of("America/Sao_Paulo");
 	private static final long SEM_ID = -1L;
+	private static final String PARECER_INDISPONIVEL = "Não foi possível analisar a foto agora. O gestor confere na validação.";
 
 	private final DescarteRepository descarteRepository;
 	private final UsuarioRepository usuarioRepository;
@@ -40,6 +45,7 @@ public class DescarteService {
 	private final TipoResiduoRepository tipoResiduoRepository;
 	private final AutenticacaoAtual autenticacaoAtual;
 	private final GamificacaoService gamificacaoService;
+	private final AnalisadorFoto analisadorFoto;
 	private final BancoOracle bancoOracle;
 	private final EntityManager entityManager;
 
@@ -50,6 +56,7 @@ public class DescarteService {
 			TipoResiduoRepository tipoResiduoRepository,
 			AutenticacaoAtual autenticacaoAtual,
 			GamificacaoService gamificacaoService,
+			AnalisadorFoto analisadorFoto,
 			BancoOracle bancoOracle,
 			EntityManager entityManager
 	) {
@@ -59,6 +66,7 @@ public class DescarteService {
 		this.tipoResiduoRepository = tipoResiduoRepository;
 		this.autenticacaoAtual = autenticacaoAtual;
 		this.gamificacaoService = gamificacaoService;
+		this.analisadorFoto = analisadorFoto;
 		this.bancoOracle = bancoOracle;
 		this.entityManager = entityManager;
 	}
@@ -86,6 +94,7 @@ public class DescarteService {
 		aplicar(descarte, request);
 		descarte.setStatus(StatusValidacao.PENDENTE);
 		aplicarRegras(descarte, SEM_ID);
+		analisarFoto(descarte);
 		return paraResponse(descarteRepository.save(descarte));
 	}
 
@@ -99,6 +108,7 @@ public class DescarteService {
 		}
 		aplicar(descarte, request);
 		aplicarRegras(descarte, descarte.getId());
+		analisarFoto(descarte);
 		return paraResponse(descarteRepository.save(descarte));
 	}
 
@@ -180,6 +190,47 @@ public class DescarteService {
 					"Descarte duplicado no mesmo dia para o mesmo cidadão, ecoponto, tipo e peso."
 			);
 		}
+	}
+
+	private void analisarFoto(Descarte descarte) {
+		if (descarte.getFotoUrl() == null) {
+			descarte.setParecer(null);
+			descarte.setMensagemParecer(null);
+			return;
+		}
+		try {
+			ParecerFoto parecer = analisadorFoto.analisar(
+					descarte.getTipoResiduo().getNome(),
+					descarte.getTipoResiduo().getInstrucao(),
+					descarte.getFotoUrl()
+			);
+			ParecerIa resultado = parecer == null || parecer.resultado() == null
+					? ParecerIa.INCONCLUSIVO
+					: parecer.resultado();
+			String mensagem = parecer == null ? null : parecer.mensagem();
+			if (mensagem == null || mensagem.isBlank()) {
+				mensagem = mensagemPadrao(resultado, descarte.getTipoResiduo().getNome());
+			}
+			descarte.setParecer(resultado);
+			descarte.setMensagemParecer(encurtar(mensagem));
+		} catch (RuntimeException ex) {
+			LOG.warn("Falha ao analisar a foto do descarte: {}", ex.getMessage());
+			descarte.setParecer(ParecerIa.INCONCLUSIVO);
+			descarte.setMensagemParecer(PARECER_INDISPONIVEL);
+		}
+	}
+
+	private String mensagemPadrao(ParecerIa resultado, String nomeResiduo) {
+		return switch (resultado) {
+			case COMPATIVEL -> "A foto parece compatível com " + nomeResiduo + ".";
+			case INCOMPATIVEL -> "A foto não parece ser " + nomeResiduo + ".";
+			case INCONCLUSIVO -> "A foto não foi suficiente para confirmar " + nomeResiduo + ".";
+		};
+	}
+
+	private String encurtar(String mensagem) {
+		String limpa = mensagem.trim();
+		return limpa.length() <= 500 ? limpa : limpa.substring(0, 500);
 	}
 
 	private void creditarSeAplicavel(Usuario usuario, BigDecimal xp) {
@@ -275,6 +326,8 @@ public class DescarteService {
 				descarte.getPesoKg(),
 				descarte.getXpGanho(),
 				descarte.getFotoUrl(),
+				descarte.getParecer(),
+				descarte.getMensagemParecer(),
 				descarte.getStatus(),
 				descarte.getDataDescarte()
 		);

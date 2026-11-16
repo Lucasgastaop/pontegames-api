@@ -2,7 +2,7 @@
 
 API backend da plataforma Ponte Games (FIAP GS 2026/2 — CitizenTech). O cidadão entrega óleo de cozinha, lixo eletrônico ou pilhas num ecoponto e o descarte validado vira XP.
 
-O modelo JPA usa as tabelas Oracle da entrega de database e não cria nem altera o schema (`ddl-auto: none`). O CRUD paginado responde em `/api`, com validação, erro padronizado, login JWT e as regras de XP do descarte. IA e mensageria entram nos commits seguintes.
+O modelo JPA usa as tabelas Oracle da entrega de database e não cria nem altera o schema (`ddl-auto: none`). O CRUD paginado responde em `/api`, com validação, erro padronizado, login JWT e as regras de XP do descarte. A foto do descarte passa pelo Spring AI. A mensageria entra no commit seguinte.
 
 ## Endpoints
 
@@ -35,6 +35,12 @@ No Oracle, rode `db/oracle-senha.sql` antes de subir. A coluna `ds_senha` não e
 
 O descarte nasce `PENDENTE`. O XP da missão é peso vezes XP por kg e só entra no saldo quando um gestor ou admin envia `POST /api/descartes/{id}/validacao` com `VALIDADO_IA`. Rejeitado não credita. Apagar um descarte validado estorna o XP. Ecoponto inativo, teto diário (óleo 5 kg, eletrônico 10 kg, pilha 1 kg) e repetição do mesmo peso no dia respondem 409. No Oracle os gatilhos continuam creditando o saldo; a API não soma de novo.
 
+## Parecer da foto
+
+No Oracle, rode `db/oracle-parecer.sql` antes de subir. As colunas do parecer não existiam na entrega de database.
+
+Quando o descarte traz `fotoUrl`, o Spring AI (OpenAI, modelo `gpt-4o-mini`) olha a imagem e o tipo declarado. A resposta do descarte ganha `parecer` (`COMPATIVEL`, `INCOMPATIVEL` ou `INCONCLUSIVO`) e `mensagemParecer`, uma frase para o cidadão. Sem foto, os dois campos ficam vazios. Se o modelo falhar, o descarte é gravado mesmo assim, com parecer inconclusivo. Esse parecer não muda o status e não credita XP: a validação continua com gestor ou admin.
+
 ## Erros
 
 Validação, conflito e recurso inexistente usam o mesmo corpo. `campos` só vem preenchido quando o problema é de um campo.
@@ -51,10 +57,11 @@ JDK 21 ou superior e Maven 3.9+. As tabelas precisam existir no Oracle. Defina a
 $env:ORACLE_URL="jdbc:oracle:thin:@localhost:1521/FREEPDB1"
 $env:ORACLE_USER="seu_usuario"
 $env:ORACLE_PASSWORD="sua_senha"
+$env:OPENAI_API_KEY="sua_chave"
 mvn spring-boot:run
 ```
 
-No Oracle 21c XE o serviço costuma ser `XEPDB1`. Os testes usam H2 em memória e não precisam do Oracle.
+No Oracle 21c XE o serviço costuma ser `XEPDB1`. Para trocar o modelo, defina `OPENAI_MODEL`. Os testes usam H2 em memória e um parecer fixo, então não precisam do Oracle nem da chave da OpenAI.
 
 A API fica em http://localhost:8080.
 

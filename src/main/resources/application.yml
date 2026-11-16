@@ -15,6 +15,14 @@ spring:
         default-page-size: 10
         max-page-size: 50
 
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-4o-mini}
+          temperature: 0.2
+
 pontegames:
   jwt:
     segredo: ${JWT_SECRET:pontegames-segredo-local-com-pelo-menos-32-bytes}

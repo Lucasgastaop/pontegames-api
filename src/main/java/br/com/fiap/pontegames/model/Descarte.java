@@ -47,6 +47,13 @@ public class Descarte {
 	private String fotoUrl;
 
 	@Enumerated(EnumType.STRING)
+	@Column(name = "tp_parecer_ia", length = 20)
+	private ParecerIa parecer;
+
+	@Column(name = "ds_parecer_ia", length = 500)
+	private String mensagemParecer;
+
+	@Enumerated(EnumType.STRING)
 	@Column(name = "st_validacao", nullable = false, length = 30)
 	private StatusValidacao status = StatusValidacao.PENDENTE;
 
@@ -104,6 +111,22 @@ public class Descarte {
 
 	public void setFotoUrl(String fotoUrl) {
 		this.fotoUrl = fotoUrl;
+	}
+
+	public ParecerIa getParecer() {
+		return parecer;
+	}
+
+	public void setParecer(ParecerIa parecer) {
+		this.parecer = parecer;
+	}
+
+	public String getMensagemParecer() {
+		return mensagemParecer;
+	}
+
+	public void setMensagemParecer(String mensagemParecer) {
+		this.mensagemParecer = mensagemParecer;
 	}
 
 	public StatusValidacao getStatus() {
