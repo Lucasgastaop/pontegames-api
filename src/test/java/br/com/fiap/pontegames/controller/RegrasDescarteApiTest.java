@@ -3,6 +3,7 @@ package br.com.fiap.pontegames.controller;
 import br.com.fiap.pontegames.model.TipoUsuario;
 import br.com.fiap.pontegames.model.Usuario;
 import br.com.fiap.pontegames.repository.DescarteRepository;
+import br.com.fiap.pontegames.repository.NotificacaoRepository;
 import br.com.fiap.pontegames.repository.PontoColetaRepository;
 import br.com.fiap.pontegames.repository.TipoResiduoRepository;
 import br.com.fiap.pontegames.repository.UsuarioRepository;
@@ -35,6 +36,9 @@ class RegrasDescarteApiTest {
 	private UsuarioRepository usuarioRepository;
 
 	@Autowired
+	private NotificacaoRepository notificacaoRepository;
+
+	@Autowired
 	private DescarteRepository descarteRepository;
 
 	@Autowired
@@ -54,6 +58,7 @@ class RegrasDescarteApiTest {
 
 	@BeforeEach
 	void preparar() throws Exception {
+		notificacaoRepository.deleteAll();
 		descarteRepository.deleteAll();
 		pontoColetaRepository.deleteAll();
 		tipoResiduoRepository.deleteAll();

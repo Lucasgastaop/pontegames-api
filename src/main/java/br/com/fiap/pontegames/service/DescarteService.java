@@ -1,6 +1,8 @@
 package br.com.fiap.pontegames.service;
 
 import br.com.fiap.pontegames.dto.DescarteRequest;
+import br.com.fiap.pontegames.messaging.PublicacaoResultadoDescarte;
+import br.com.fiap.pontegames.messaging.ResultadoDescarte;
 import br.com.fiap.pontegames.dto.DescarteResponse;
 import br.com.fiap.pontegames.dto.PaginaResponse;
 import br.com.fiap.pontegames.model.Descarte;
@@ -46,6 +48,7 @@ public class DescarteService {
 	private final AutenticacaoAtual autenticacaoAtual;
 	private final GamificacaoService gamificacaoService;
 	private final AnalisadorFoto analisadorFoto;
+	private final PublicacaoResultadoDescarte publicacaoResultadoDescarte;
 	private final BancoOracle bancoOracle;
 	private final EntityManager entityManager;
 
@@ -57,6 +60,7 @@ public class DescarteService {
 			AutenticacaoAtual autenticacaoAtual,
 			GamificacaoService gamificacaoService,
 			AnalisadorFoto analisadorFoto,
+			PublicacaoResultadoDescarte publicacaoResultadoDescarte,
 			BancoOracle bancoOracle,
 			EntityManager entityManager
 	) {
@@ -67,6 +71,7 @@ public class DescarteService {
 		this.autenticacaoAtual = autenticacaoAtual;
 		this.gamificacaoService = gamificacaoService;
 		this.analisadorFoto = analisadorFoto;
+		this.publicacaoResultadoDescarte = publicacaoResultadoDescarte;
 		this.bancoOracle = bancoOracle;
 		this.entityManager = entityManager;
 	}
@@ -131,6 +136,17 @@ public class DescarteService {
 		}
 		Descarte salvo = descarteRepository.saveAndFlush(descarte);
 		sincronizarSaldo(salvo.getUsuario());
+		Usuario usuario = salvo.getUsuario();
+		publicacaoResultadoDescarte.agendar(new ResultadoDescarte(
+				salvo.getId(),
+				usuario.getId(),
+				usuario.getNome(),
+				salvo.getTipoResiduo().getNome(),
+				salvo.getXpGanho(),
+				usuario.getXpTotal(),
+				usuario.getNivel(),
+				salvo.getStatus()
+		));
 		return paraResponse(salvo);
 	}
 

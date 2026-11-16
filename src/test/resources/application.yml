@@ -15,6 +15,10 @@ spring:
       chat: none
     openai:
       api-key: teste
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
 
 pontegames:
   jwt:

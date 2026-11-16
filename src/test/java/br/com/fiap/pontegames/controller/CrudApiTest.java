@@ -3,6 +3,7 @@ package br.com.fiap.pontegames.controller;
 import br.com.fiap.pontegames.model.TipoUsuario;
 import br.com.fiap.pontegames.model.Usuario;
 import br.com.fiap.pontegames.repository.DescarteRepository;
+import br.com.fiap.pontegames.repository.NotificacaoRepository;
 import br.com.fiap.pontegames.repository.PontoColetaRepository;
 import br.com.fiap.pontegames.repository.TipoResiduoRepository;
 import br.com.fiap.pontegames.repository.UsuarioRepository;
@@ -35,6 +36,9 @@ class CrudApiTest {
 	private MockMvc mockMvc;
 
 	@Autowired
+	private NotificacaoRepository notificacaoRepository;
+
+	@Autowired
 	private DescarteRepository descarteRepository;
 
 	@Autowired
@@ -53,6 +57,7 @@ class CrudApiTest {
 
 	@BeforeEach
 	void limpar() throws Exception {
+		notificacaoRepository.deleteAll();
 		descarteRepository.deleteAll();
 		pontoColetaRepository.deleteAll();
 		tipoResiduoRepository.deleteAll();

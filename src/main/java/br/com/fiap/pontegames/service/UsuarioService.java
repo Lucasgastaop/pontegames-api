@@ -85,7 +85,7 @@ public class UsuarioService {
 		try {
 			usuarioRepository.flush();
 		} catch (DataIntegrityViolationException ex) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Usuário possui descartes e não pode ser excluído.");
+			throw new ResponseStatusException(HttpStatus.CONFLICT, "Usuário possui descartes ou avisos e não pode ser excluído.");
 		}
 	}
 
