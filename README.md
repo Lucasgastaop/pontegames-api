@@ -78,7 +78,7 @@ Com a API no ar, a documentação interativa fica em http://localhost:8080/swagg
 
 ## Deploy
 
-Não há deploy público. A avaliação sobe a API na máquina local com os passos abaixo.
+A API publicada fica em https://pontegames-api.onrender.com. O Swagger público fica em https://pontegames-api.onrender.com/swagger-ui.html. No plano gratuito o serviço dorme sem uso e a primeira chamada pode levar cerca de um minuto. A avaliação também pode subir a API na máquina local, com os passos abaixo.
 
 ## Declaração de uso de IA
 
