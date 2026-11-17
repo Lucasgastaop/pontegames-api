@@ -46,7 +46,9 @@ O descarte nasce `PENDENTE`. O XP da missão é peso vezes XP por kg e só entra
 
 No Oracle, rode `db/oracle-parecer.sql` antes de subir. As colunas do parecer não existiam na entrega de database.
 
-Quando o descarte traz `fotoUrl`, o Spring AI chama o Ollama local, modelo `llama3.2`, em `http://localhost:11434/v1`. A chave padrão é `local`, porque o cliente exige um valor. O aplicativo do Ollama precisa estar aberto. A resposta do descarte ganha `parecer` (`COMPATIVEL`, `INCOMPATIVEL` ou `INCONCLUSIVO`) e `mensagemParecer`, uma frase para o cidadão. Sem foto, os dois campos ficam vazios. Se o modelo falhar, o descarte é gravado mesmo assim, com parecer inconclusivo. Esse parecer não muda o status e não credita XP: a validação continua com gestor ou admin.
+Quando o descarte traz `fotoUrl`, a API baixa a imagem e envia o arquivo no campo `foto` para o serviço de IA do grupo, `POST /api/v1/ia/validar`. O endereço padrão é `https://ponte-games-ia-service.onrender.com/api/v1/ia/validar` e pode ser trocado com `IA_SERVICE_URL`. A leitura espera até 60 segundos, porque o plano gratuito do Render hiberna. Se esse serviço não responder, o Spring AI chama o Ollama local, modelo `llama3.2`, em `http://localhost:11434/v1`. A chave padrão é `local`, porque o cliente exige um valor. O aplicativo do Ollama precisa estar aberto.
+
+A resposta do descarte ganha `parecer` (`COMPATIVEL`, `INCOMPATIVEL` ou `INCONCLUSIVO`) e `mensagemParecer`, uma frase para o cidadão. Sem foto, os dois campos ficam vazios. Se os dois caminhos falharem, o descarte é gravado mesmo assim, com parecer inconclusivo. Esse parecer não muda o status e não credita XP: a validação continua com gestor ou admin, e o XP continua sendo peso vezes XP por kg.
 
 ## Requisito 5 — opção A (RabbitMQ)
 
@@ -80,7 +82,7 @@ Não há deploy público. A avaliação sobe a API na máquina local com os pass
 
 ## Declaração de uso de IA
 
-O parecer da foto usa o Ollama local pelo Spring AI, modelo `llama3.2`. A chave padrão `local` não é segredo. Para apontar outro servidor, defina `OPENAI_BASE_URL`, `OPENAI_API_KEY` e `OPENAI_MODEL`. O desenvolvimento do código teve apoio do Cursor. O grupo revisou o que está no repositório e responde pela solução.
+O parecer da foto consulta primeiro o serviço de IA do grupo. Se ele não responder, o Spring AI usa o Ollama local, modelo `llama3.2`. A chave padrão `local` não é segredo. Para apontar outro servidor, defina `OPENAI_BASE_URL`, `OPENAI_API_KEY` e `OPENAI_MODEL`. O desenvolvimento do código teve apoio do Cursor. O grupo revisou o que está no repositório e responde pela solução.
 
 ## Como rodar
 

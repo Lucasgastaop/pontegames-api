@@ -3,7 +3,7 @@ package br.com.fiap.pontegames.service;
 import br.com.fiap.pontegames.model.ParecerIa;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.context.annotation.Profile;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
 
@@ -12,9 +12,9 @@ import java.net.URI;
 import java.text.Normalizer;
 import java.util.Locale;
 
-@Service
+@Component
 @Profile("!test")
-public class AnalisadorFotoSpringAi implements AnalisadorFoto {
+class AnalisadorFotoSpringAi {
 
 	private static final String INSTRUCAO = """
 			Você confere a foto de um descarte feito por um cidadão num ecoponto.
@@ -32,8 +32,7 @@ public class AnalisadorFotoSpringAi implements AnalisadorFoto {
 		this.chatClient = builder.build();
 	}
 
-	@Override
-	public ParecerFoto analisar(String nomeResiduo, String instrucao, String fotoUrl) {
+	ParecerFoto analisar(String nomeResiduo, String instrucao, String fotoUrl) {
 		String pedido = """
 				Tipo declarado: %s.
 				Como esse resíduo deve ser entregue: %s.

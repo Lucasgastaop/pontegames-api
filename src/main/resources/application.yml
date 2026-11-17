@@ -32,6 +32,8 @@ spring:
     password: ${RABBITMQ_PASSWORD:guest}
 
 pontegames:
+  ia:
+    url: ${IA_SERVICE_URL:https://ponte-games-ia-service.onrender.com/api/v1/ia/validar}
   jwt:
     segredo: ${JWT_SECRET:pontegames-segredo-local-com-pelo-menos-32-bytes}
     expiracao-minutos: 120
