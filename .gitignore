@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Conexão local da FIAP. Não vai para o GitHub nem para o Render.
+src/main/resources/application-local.yml

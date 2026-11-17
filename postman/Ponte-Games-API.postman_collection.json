@@ -1,0 +1,899 @@
+{
+  "info": {
+    "name": "Ponte Games API",
+    "description": "Collection da API consumida pelo app Mobile.\n\nSuba a API em http://localhost:8080 (Oracle com os scripts db/oracle-senha.sql, db/oracle-parecer.sql e db/oracle-notificacao.sql, RabbitMQ e OPENAI_API_KEY). Usuários de teste, senha senha123: ana.souza@pontegames.test (cidadão), elena.duarte@pontegames.test (gestora), fabio.nunes@pontegames.test (admin).\n\nRode as pastas de cima para baixo no Collection Runner. A primeira request sorteia pesos do dia para não esbarrar na regra de duplicata. Se o mesmo peso for repetido no mesmo dia, a API responde 409.\n\nContrato do app: login ou cadastro, GET /api/usuarios/me, GET /api/tipos-residuo, GET /api/pontos-coleta, POST/GET/PUT/DELETE /api/descartes e GET /api/notificacoes. O header é Authorization: Bearer <token>. O descarte nasce PENDENTE. O XP só entra quando a gestora envia POST /api/descartes/{id}/validacao com VALIDADO_IA. A foto precisa ser uma URL http ou https pública para o parecer da IA.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:8080"},
+    {"key": "tokenCidadao", "value": ""},
+    {"key": "tokenGestor", "value": ""},
+    {"key": "tokenAdmin", "value": ""},
+    {"key": "usuarioId", "value": ""},
+    {"key": "tipoOleoId", "value": ""},
+    {"key": "tipoEletronicoId", "value": ""},
+    {"key": "tipoPilhaId", "value": ""},
+    {"key": "pontoId", "value": ""},
+    {"key": "pontoInativoId", "value": ""},
+    {"key": "descarteId", "value": ""},
+    {"key": "descarteRejeitadoId", "value": ""},
+    {"key": "pesoOleo", "value": "1.50"},
+    {"key": "pesoRejeicao", "value": "0.50"},
+    {"key": "xpAntes", "value": "0"},
+    {"key": "emailNovo", "value": "mobile.novo@pontegames.test"},
+    {"key": "cpfNovo", "value": "123.456.789-10"},
+    {"key": "emailPublico", "value": "publico.novo@pontegames.test"},
+    {"key": "cpfPublico", "value": "888.123.456-78"}
+  ],
+  "item": [
+    {
+      "name": "01 Preparar",
+      "item": [
+        {
+          "name": "Status",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const centesimos = 100 + (Date.now() % 250);",
+                  "pm.collectionVariables.set('pesoOleo', (centesimos / 100).toFixed(2));",
+                  "const rejeicao = 40 + (Date.now() % 20);",
+                  "pm.collectionVariables.set('pesoRejeicao', (rejeicao / 100).toFixed(2));",
+                  "const n = String(Date.now()).slice(-9);",
+                  "pm.collectionVariables.set('emailNovo', 'mobile.' + n + '@pontegames.test');",
+                  "pm.collectionVariables.set('cpfNovo', n.slice(0, 3) + '.' + n.slice(3, 6) + '.' + n.slice(6, 9) + '-10');",
+                  "pm.collectionVariables.set('emailPublico', 'publico.' + n + '@pontegames.test');",
+                  "pm.collectionVariables.set('cpfPublico', '888.' + n.slice(0, 3) + '.' + n.slice(3, 6) + '-' + n.slice(7, 9));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.status).to.eql('ok');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/status",
+            "description": "Público. Confere se a API subiu."
+          }
+        },
+        {
+          "name": "Login cidadã Ana",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.tipo).to.eql('CIDADAO');",
+                  "pm.expect(body.tipoToken).to.eql('Bearer');",
+                  "pm.collectionVariables.set('tokenCidadao', body.token);",
+                  "pm.collectionVariables.set('usuarioId', String(body.id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ana.souza@pontegames.test\",\n  \"senha\": \"senha123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "Salva tokenCidadao e usuarioId. O app usa este token nas próximas chamadas."
+          }
+        },
+        {
+          "name": "Login gestora Elena",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.tipo).to.eql('GESTOR');",
+                  "pm.collectionVariables.set('tokenGestor', body.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"elena.duarte@pontegames.test\",\n  \"senha\": \"senha123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Login admin Fabio",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.tipo).to.eql('ADMIN');",
+                  "pm.collectionVariables.set('tokenAdmin', body.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"fabio.nunes@pontegames.test\",\n  \"senha\": \"senha123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Catálogo (gestora)",
+      "item": [
+        {
+          "name": "Criar óleo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('tipoOleoId', String(pm.response.json().id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenGestor}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Óleo de Cozinha\",\n  \"instrucao\": \"Garrafa PET fechada.\",\n  \"xpPorKg\": 80.00\n}"
+            },
+            "url": "{{baseUrl}}/api/tipos-residuo",
+            "description": "O nome precisa conter óleo, eletr ou pilha/bateria. É assim que a API acha o limite diário: 5 kg, 10 kg e 1 kg."
+          }
+        },
+        {
+          "name": "Criar eletrônico",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('tipoEletronicoId', String(pm.response.json().id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenGestor}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Lixo eletrônico\",\n  \"instrucao\": \"Sem pilha solta.\",\n  \"xpPorKg\": 120.00\n}"
+            },
+            "url": "{{baseUrl}}/api/tipos-residuo"
+          }
+        },
+        {
+          "name": "Criar pilha",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('tipoPilhaId', String(pm.response.json().id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenGestor}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Pilha e bateria\",\n  \"instrucao\": \"Não jogar no lixo comum.\",\n  \"xpPorKg\": 200.00\n}"
+            },
+            "url": "{{baseUrl}}/api/tipos-residuo"
+          }
+        },
+        {
+          "name": "Criar ecoponto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.ativo).to.eql(true);",
+                  "pm.collectionVariables.set('pontoId', String(body.id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenGestor}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Ecoponto Vila Mariana\",\n  \"endereco\": \"Rua Domingos de Morais, 1000\",\n  \"latitude\": -23.5881,\n  \"longitude\": -46.6342\n}"
+            },
+            "url": "{{baseUrl}}/api/pontos-coleta",
+            "description": "Sem o campo ativo, o ecoponto nasce ativo."
+          }
+        },
+        {
+          "name": "Criar ecoponto inativo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('pontoInativoId', String(pm.response.json().id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenGestor}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Ecoponto Centro\",\n  \"endereco\": \"Praça da Sé\",\n  \"latitude\": -23.5505,\n  \"longitude\": -46.6333,\n  \"ativo\": false\n}"
+            },
+            "url": "{{baseUrl}}/api/pontos-coleta"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 App mobile — antes da validação",
+      "item": [
+        {
+          "name": "Meu perfil",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.email).to.eql('ana.souza@pontegames.test');",
+                  "pm.expect(body).to.not.have.property('senha');",
+                  "pm.collectionVariables.set('xpAntes', String(body.xpTotal));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/usuarios/me",
+            "description": "Perfil de quem está logado. nivel e xpTotal vêm daqui."
+          }
+        },
+        {
+          "name": "Listar tipos de resíduo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().conteudo).to.be.an('array');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/tipos-residuo?page=0&size=10&sort=nome,asc",
+            "description": "Lista paginada. Campos: conteudo, pagina, tamanho, totalElementos, totalPaginas."
+          }
+        },
+        {
+          "name": "Listar ecopontos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().conteudo).to.be.an('array');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/pontos-coleta?page=0&size=10&sort=nome,asc"
+          }
+        },
+        {
+          "name": "Registrar descarte com foto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.status).to.eql('PENDENTE');",
+                  "const esperado = Number(pm.collectionVariables.get('pesoOleo')) * 80;",
+                  "pm.expect(Number(body.xpGanho)).to.be.closeTo(esperado, 0.01);",
+                  "pm.expect(body.parecer).to.be.oneOf(['COMPATIVEL', 'INCOMPATIVEL', 'INCONCLUSIVO']);",
+                  "pm.collectionVariables.set('descarteId', String(body.id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": {{usuarioId}},\n  \"pontoId\": {{pontoId}},\n  \"tipoResiduoId\": {{tipoOleoId}},\n  \"pesoKg\": {{pesoOleo}},\n  \"fotoUrl\": \"https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Olive_oil_from_Oneglia.jpg/640px-Olive_oil_from_Oneglia.jpg\"\n}"
+            },
+            "url": "{{baseUrl}}/api/descartes",
+            "description": "usuarioId tem de ser o do token quando quem chama é cidadão. Nasce PENDENTE. parecer e mensagemParecer vêm da foto. Troque fotoUrl por uma imagem pública se o parecer vier INCONCLUSIVO."
+          }
+        },
+        {
+          "name": "Consultar descarte",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get('descarteId')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/descartes/{{descarteId}}"
+          }
+        },
+        {
+          "name": "Listar meus descartes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().totalElementos).to.be.at.least(1);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/descartes?page=0&size=10&sort=id,desc",
+            "description": "Cidadão só recebe os próprios descartes. Gestora e admin recebem todos."
+          }
+        },
+        {
+          "name": "Atualizar descarte pendente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().status).to.eql('PENDENTE');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "PUT",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": {{usuarioId}},\n  \"pontoId\": {{pontoId}},\n  \"tipoResiduoId\": {{tipoOleoId}},\n  \"pesoKg\": {{pesoOleo}},\n  \"fotoUrl\": \"https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Olive_oil_from_Oneglia.jpg/320px-Olive_oil_from_Oneglia.jpg\"\n}"
+            },
+            "url": "{{baseUrl}}/api/descartes/{{descarteId}}",
+            "description": "Só altera descarte PENDENTE. O campo status do corpo é ignorado."
+          }
+        },
+        {
+          "name": "Meus avisos antes da validação",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/notificacoes?page=0&size=10&sort=id,desc",
+            "description": "Ainda não há aviso deste descarte. O aviso nasce depois que a gestora valida ou rejeita."
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Validação (gestora)",
+      "item": [
+        {
+          "name": "Validar descarte",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().status).to.eql('VALIDADO_IA');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenGestor}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"VALIDADO_IA\"\n}"
+            },
+            "url": "{{baseUrl}}/api/descartes/{{descarteId}}/validacao",
+            "description": "Credita o XP e publica o evento no RabbitMQ. O consumidor grava o aviso."
+          }
+        },
+        {
+          "name": "Cidadão registra descarte para rejeição",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('descarteRejeitadoId', String(pm.response.json().id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": {{usuarioId}},\n  \"pontoId\": {{pontoId}},\n  \"tipoResiduoId\": {{tipoOleoId}},\n  \"pesoKg\": {{pesoRejeicao}}\n}"
+            },
+            "url": "{{baseUrl}}/api/descartes",
+            "description": "Sem foto, parecer e mensagemParecer ficam nulos."
+          }
+        },
+        {
+          "name": "Rejeitar descarte",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().status).to.eql('REJEITADO');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenGestor}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"REJEITADO\"\n}"
+            },
+            "url": "{{baseUrl}}/api/descartes/{{descarteRejeitadoId}}/validacao",
+            "description": "Não credita XP. Gera aviso de rejeição. Um descarte rejeitado libera nova tentativa com o mesmo peso."
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 App mobile — depois da validação",
+      "item": [
+        {
+          "name": "Perfil com XP creditado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const ganho = Number(pm.collectionVariables.get('pesoOleo')) * 80;",
+                  "const antes = Number(pm.collectionVariables.get('xpAntes'));",
+                  "pm.expect(Number(pm.response.json().xpTotal)).to.be.closeTo(antes + ganho, 0.01);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/usuarios/me",
+            "description": "Nível 1 até 199 XP, 2 até 499, 3 até 999, 4 até 1999, 5 a partir de 2000."
+          }
+        },
+        {
+          "name": "Meus avisos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const avisos = pm.response.json().conteudo.map((item) => item.mensagem).join(' ');",
+                  "pm.expect(avisos).to.include('foi validado');",
+                  "pm.expect(avisos).to.include('foi rejeitado');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/notificacoes?page=0&size=10&sort=id,desc",
+            "description": "Cada usuário vê só os próprios avisos. Se o RabbitMQ estiver fora, esta lista não recebe a linha nova."
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Admin",
+      "item": [
+        {
+          "name": "Listar usuários",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().totalElementos).to.be.at.least(3);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenAdmin}}", "type": "string"}]},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/usuarios?page=0&size=10&sort=nome,asc",
+            "description": "Gestora também pode listar. Cidadão recebe 403."
+          }
+        },
+        {
+          "name": "Cadastrar cidadão pelo admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.expect(pm.response.json().tipo).to.eql('CIDADAO');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenAdmin}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Cidadão Mobile\",\n  \"email\": \"{{emailNovo}}\",\n  \"cpf\": \"{{cpfNovo}}\",\n  \"tipo\": \"CIDADAO\",\n  \"senha\": \"senha123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/usuarios",
+            "description": "E-mail e CPF mudam a cada execução da pasta 01. Só o admin cria usuário com papel."
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Cadastro público e erros esperados",
+      "item": [
+        {
+          "name": "Cadastrar cidadão",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.expect(body.tipo).to.eql('CIDADAO');",
+                  "pm.expect(body).to.not.have.property('senha');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nome\": \"Novo Cidadão\",\n  \"email\": \"{{emailPublico}}\",\n  \"cpf\": \"{{cpfPublico}}\",\n  \"senha\": \"senha123\",\n  \"tipo\": \"ADMIN\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/registrar",
+            "description": "Público. O campo tipo é ignorado: o cadastro nasce sempre cidadão. CPF no formato 000.000.000-00."
+          }
+        },
+        {
+          "name": "Login com senha errada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ana.souza@pontegames.test\",\n  \"senha\": \"errada1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          }
+        },
+        {
+          "name": "Descarte sem token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/descartes"
+          }
+        },
+        {
+          "name": "Cidadão lista usuários",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/usuarios"
+          }
+        },
+        {
+          "name": "Cidadão tenta validar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403', () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"VALIDADO_IA\"\n}"
+            },
+            "url": "{{baseUrl}}/api/descartes/{{descarteRejeitadoId}}/validacao"
+          }
+        },
+        {
+          "name": "Descarte duplicado no dia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.expect(pm.response.json().mensagem).to.include('duplicado');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": {{usuarioId}},\n  \"pontoId\": {{pontoId}},\n  \"tipoResiduoId\": {{tipoOleoId}},\n  \"pesoKg\": {{pesoOleo}}\n}"
+            },
+            "url": "{{baseUrl}}/api/descartes",
+            "description": "Mesmo cidadão, ecoponto, tipo e peso no mesmo dia, com o anterior ainda não rejeitado."
+          }
+        },
+        {
+          "name": "Limite diário de óleo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.expect(pm.response.json().mensagem).to.include('Limite diário');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": {{usuarioId}},\n  \"pontoId\": {{pontoId}},\n  \"tipoResiduoId\": {{tipoOleoId}},\n  \"pesoKg\": 4.50\n}"
+            },
+            "url": "{{baseUrl}}/api/descartes",
+            "description": "Óleo aceita no máximo 5 kg no dia, somando o que não foi rejeitado."
+          }
+        },
+        {
+          "name": "Ecoponto inativo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.expect(pm.response.json().mensagem).to.eql('Ecoponto inativo não recebe descarte.');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": {{usuarioId}},\n  \"pontoId\": {{pontoInativoId}},\n  \"tipoResiduoId\": {{tipoOleoId}},\n  \"pesoKg\": 0.30\n}"
+            },
+            "url": "{{baseUrl}}/api/descartes"
+          }
+        },
+        {
+          "name": "Peso zero",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));",
+                  "pm.expect(pm.response.json().campos).to.be.an('array').that.is.not.empty;"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "bearer", "bearer": [{"key": "token", "value": "{{tokenCidadao}}", "type": "string"}]},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioId\": {{usuarioId}},\n  \"pontoId\": {{pontoId}},\n  \"tipoResiduoId\": {{tipoOleoId}},\n  \"pesoKg\": 0\n}"
+            },
+            "url": "{{baseUrl}}/api/descartes"
+          }
+        }
+      ]
+    }
+  ]
+}

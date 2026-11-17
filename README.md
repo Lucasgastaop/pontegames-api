@@ -46,7 +46,7 @@ O descarte nasce `PENDENTE`. O XP da missão é peso vezes XP por kg e só entra
 
 No Oracle, rode `db/oracle-parecer.sql` antes de subir. As colunas do parecer não existiam na entrega de database.
 
-Quando o descarte traz `fotoUrl`, o Spring AI (OpenAI, modelo `gpt-4o-mini`) olha a imagem e o tipo declarado. A resposta do descarte ganha `parecer` (`COMPATIVEL`, `INCOMPATIVEL` ou `INCONCLUSIVO`) e `mensagemParecer`, uma frase para o cidadão. Sem foto, os dois campos ficam vazios. Se o modelo falhar, o descarte é gravado mesmo assim, com parecer inconclusivo. Esse parecer não muda o status e não credita XP: a validação continua com gestor ou admin.
+Quando o descarte traz `fotoUrl`, o Spring AI chama o Ollama local, modelo `llama3.2`, no endereço `http://localhost:11434`. A chave padrão é `local`, porque o cliente exige um valor. O aplicativo do Ollama precisa estar aberto. A resposta do descarte ganha `parecer` (`COMPATIVEL`, `INCOMPATIVEL` ou `INCONCLUSIVO`) e `mensagemParecer`, uma frase para o cidadão. Sem foto, os dois campos ficam vazios. Se o modelo falhar, o descarte é gravado mesmo assim, com parecer inconclusivo. Esse parecer não muda o status e não credita XP: a validação continua com gestor ou admin.
 
 ## Requisito 5 — opção A (RabbitMQ)
 
@@ -80,21 +80,22 @@ Não há deploy público. A avaliação sobe a API na máquina local com os pass
 
 ## Declaração de uso de IA
 
-O parecer da foto chama a API da OpenAI, modelo `gpt-4o-mini`, pelo Spring AI. A chave fica só na variável `OPENAI_API_KEY` e não entra no repositório. O desenvolvimento do código teve apoio do Cursor. O grupo revisou o que está no repositório e responde pela solução.
+O parecer da foto usa o Ollama local pelo Spring AI, modelo `llama3.2`. A chave padrão `local` não é segredo. Para apontar outro servidor, defina `OPENAI_BASE_URL`, `OPENAI_API_KEY` e `OPENAI_MODEL`. O desenvolvimento do código teve apoio do Cursor. O grupo revisou o que está no repositório e responde pela solução.
 
 ## Como rodar
 
-JDK 21 ou superior e Maven 3.9+. No Oracle, com as tabelas da entrega de database já criadas, rode nesta ordem `db/oracle-senha.sql`, `db/oracle-parecer.sql` e `db/oracle-notificacao.sql`. Suba o RabbitMQ com o comando da seção do requisito 5. Defina a conexão e a chave, e suba a API:
+JDK 21 ou superior e Maven 3.9+. No Oracle, com as tabelas da entrega de database já criadas, rode nesta ordem `db/oracle-senha.sql`, `db/oracle-parecer.sql` e `db/oracle-notificacao.sql`. Suba o RabbitMQ com o comando da seção do requisito 5.
+
+Na máquina local, a conexão fica em `src/main/resources/application-local.yml`. Esse arquivo não entra no Git. No Render, não existe esse arquivo: defina `ORACLE_URL`, `ORACLE_USER` e `ORACLE_PASSWORD` no painel do serviço. Em outra máquina, use as variáveis abaixo e suba a API:
 
 ```text
 $env:ORACLE_URL="jdbc:oracle:thin:@localhost:1521/FREEPDB1"
 $env:ORACLE_USER="seu_usuario"
 $env:ORACLE_PASSWORD="sua_senha"
-$env:OPENAI_API_KEY="sua_chave"
 mvn spring-boot:run
 ```
 
-No Oracle 21c XE o serviço costuma ser `XEPDB1`. Para trocar o modelo, defina `OPENAI_MODEL`. O RabbitMQ precisa estar no ar para o aviso chegar. Os testes usam H2 em memória, um parecer fixo e a entrega direta do evento, então não precisam do Oracle, da chave da OpenAI nem do broker.
+No Oracle 21c XE o serviço costuma ser `XEPDB1`. Deixe o aplicativo do Ollama aberto. Para trocar o modelo, defina `OPENAI_MODEL`. O RabbitMQ precisa estar no ar para o aviso chegar. Os testes usam H2 em memória, um parecer fixo e a entrega direta do evento, então não precisam do Oracle, do Ollama nem do broker.
 
 A API fica em http://localhost:8080.
 
