@@ -4,4 +4,6 @@ public interface AnalisadorFoto {
 
 	ParecerFoto analisar(String nomeResiduo, String instrucao, String fotoUrl);
 
+	ParecerFoto analisar(String nomeResiduo, String instrucao, byte[] imagem, String nomeArquivo);
+
 }

@@ -30,10 +30,17 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER:guest}
     password: ${RABBITMQ_PASSWORD:guest}
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 pontegames:
   ia:
     url: ${IA_SERVICE_URL:https://ponte-games-ia-service.onrender.com/api/v1/ia/validar}
+  fotos:
+    diretorio: ${FOTOS_DIR:dados/fotos}
+    tamanho-maximo-bytes: 5242880
   jwt:
     segredo: ${JWT_SECRET:pontegames-segredo-local-com-pelo-menos-32-bytes}
     expiracao-minutos: 120

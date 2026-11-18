@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Ponte Games API",
-    "description": "Collection da API consumida pelo app Mobile.\n\nSuba a API em http://localhost:8080 (Oracle com os scripts db/oracle-senha.sql, db/oracle-parecer.sql e db/oracle-notificacao.sql, RabbitMQ e o aplicativo do Ollama aberto no modelo llama3.2). Usuários de teste, senha senha123: ana.souza@pontegames.test (cidadão), elena.duarte@pontegames.test (gestora), fabio.nunes@pontegames.test (admin).\n\nRode as pastas de cima para baixo no Collection Runner. A primeira request sorteia pesos do dia para não esbarrar na regra de duplicata. Se o mesmo peso for repetido no mesmo dia, a API responde 409.\n\nContrato do app: login ou cadastro, GET /api/usuarios/me, GET /api/tipos-residuo, GET /api/pontos-coleta, POST/GET/PUT/DELETE /api/descartes e GET /api/notificacoes. O header é Authorization: Bearer <token>. O descarte nasce PENDENTE. O XP só entra quando a gestora envia POST /api/descartes/{id}/validacao com VALIDADO_IA. A foto precisa ser uma URL http ou https pública para o parecer da IA.",
+    "description": "Collection da API consumida pelo app Mobile.\n\nSuba a API em http://localhost:8080 (Oracle com os scripts db/oracle-senha.sql, db/oracle-parecer.sql e db/oracle-notificacao.sql, RabbitMQ e o aplicativo do Ollama aberto no modelo llama3.2). Usuários de teste, senha senha123: ana.souza@pontegames.test (cidadão), elena.duarte@pontegames.test (gestora), fabio.nunes@pontegames.test (admin).\n\nRode as pastas de cima para baixo no Collection Runner. A primeira request sorteia pesos do dia para não esbarrar na regra de duplicata. Se o mesmo peso for repetido no mesmo dia, a API responde 409.\n\nContrato do app: login ou cadastro, GET /api/usuarios/me, GET /api/tipos-residuo, GET /api/pontos-coleta, POST/GET/PUT/DELETE /api/descartes e GET /api/notificacoes. O header é Authorization: Bearer <token>. O descarte nasce PENDENTE. O XP só entra quando a gestora envia POST /api/descartes/{id}/validacao com VALIDADO_IA. A foto pode ir em fotoUrl (URL http ou https pública) ou no multipart, campo foto, como JPG ou PNG de até 5 MB. Quando o arquivo veio no upload, fotoUrl volta como /api/fotos/{arquivo} e abre com o mesmo token.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -388,7 +388,7 @@
               "raw": "{\n  \"usuarioId\": {{usuarioId}},\n  \"pontoId\": {{pontoId}},\n  \"tipoResiduoId\": {{tipoOleoId}},\n  \"pesoKg\": {{pesoOleo}},\n  \"fotoUrl\": \"https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Olive_oil_from_Oneglia.jpg/640px-Olive_oil_from_Oneglia.jpg\"\n}"
             },
             "url": "{{baseUrl}}/api/descartes",
-            "description": "usuarioId tem de ser o do token quando quem chama é cidadão. Nasce PENDENTE. parecer e mensagemParecer vêm da foto. Troque fotoUrl por uma imagem pública se o parecer vier INCONCLUSIVO."
+            "description": "usuarioId tem de ser o do token quando quem chama é cidadão. Nasce PENDENTE. parecer e mensagemParecer vêm da foto. Troque fotoUrl por uma imagem pública se o parecer vier INCONCLUSIVO. Para mandar o arquivo, use multipart/form-data com os mesmos campos e a parte foto em JPG ou PNG."
           }
         },
         {

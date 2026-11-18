@@ -4,6 +4,7 @@ import br.com.fiap.pontegames.model.ParecerIa;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
 
@@ -40,6 +41,29 @@ class AnalisadorFotoSpringAi {
 		ParecerModelo modelo = chatClient.prompt()
 				.system(INSTRUCAO)
 				.user(usuario -> preencher(usuario, pedido, fotoUrl))
+				.call()
+				.entity(ParecerModelo.class);
+		if (modelo == null) {
+			throw new IllegalStateException("O modelo não devolveu um parecer.");
+		}
+		return new ParecerFoto(ler(modelo.resultado()), modelo.mensagem());
+	}
+
+	ParecerFoto analisar(String nomeResiduo, String instrucao, byte[] imagem, String nomeArquivo) {
+		String pedido = """
+				Tipo declarado: %s.
+				Como esse resíduo deve ser entregue: %s.
+				""".formatted(nomeResiduo, instrucao);
+		ParecerModelo modelo = chatClient.prompt()
+				.system(INSTRUCAO)
+				.user(usuario -> {
+					if (imagem == null || imagem.length == 0) {
+						usuario.text(pedido);
+						return;
+					}
+					String nome = nomeArquivo == null ? "foto.jpg" : nomeArquivo;
+					usuario.text(pedido).media(mime(nome), new ByteArrayResource(imagem));
+				})
 				.call()
 				.entity(ParecerModelo.class);
 		if (modelo == null) {

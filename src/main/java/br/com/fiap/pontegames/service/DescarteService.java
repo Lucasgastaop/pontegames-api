@@ -25,6 +25,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
@@ -32,6 +33,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.Objects;
 
 @Service
 public class DescarteService {
@@ -48,6 +50,7 @@ public class DescarteService {
 	private final AutenticacaoAtual autenticacaoAtual;
 	private final GamificacaoService gamificacaoService;
 	private final AnalisadorFoto analisadorFoto;
+	private final ArmazenamentoFoto armazenamentoFoto;
 	private final PublicacaoResultadoDescarte publicacaoResultadoDescarte;
 	private final BancoOracle bancoOracle;
 	private final EntityManager entityManager;
@@ -60,6 +63,7 @@ public class DescarteService {
 			AutenticacaoAtual autenticacaoAtual,
 			GamificacaoService gamificacaoService,
 			AnalisadorFoto analisadorFoto,
+			ArmazenamentoFoto armazenamentoFoto,
 			PublicacaoResultadoDescarte publicacaoResultadoDescarte,
 			BancoOracle bancoOracle,
 			EntityManager entityManager
@@ -71,6 +75,7 @@ public class DescarteService {
 		this.autenticacaoAtual = autenticacaoAtual;
 		this.gamificacaoService = gamificacaoService;
 		this.analisadorFoto = analisadorFoto;
+		this.armazenamentoFoto = armazenamentoFoto;
 		this.publicacaoResultadoDescarte = publicacaoResultadoDescarte;
 		this.bancoOracle = bancoOracle;
 		this.entityManager = entityManager;
@@ -93,28 +98,20 @@ public class DescarteService {
 	}
 
 	@Transactional
-	public DescarteResponse criar(DescarteRequest request) {
+	public DescarteResponse criar(DescarteRequest request, MultipartFile foto) {
 		garantirProprioDescarte(request.usuarioId());
-		Descarte descarte = new Descarte();
-		aplicar(descarte, request);
-		descarte.setStatus(StatusValidacao.PENDENTE);
-		aplicarRegras(descarte, SEM_ID);
-		analisarFoto(descarte);
-		return paraResponse(descarteRepository.save(descarte));
+		return gravar(new Descarte(), request, foto, true);
 	}
 
 	@Transactional
-	public DescarteResponse atualizar(Long id, DescarteRequest request) {
+	public DescarteResponse atualizar(Long id, DescarteRequest request, MultipartFile foto) {
 		Descarte descarte = buscarEntidade(id);
 		garantirProprioDescarte(descarte.getUsuario().getId());
 		garantirProprioDescarte(request.usuarioId());
 		if (descarte.getStatus() != StatusValidacao.PENDENTE) {
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "Somente um descarte pendente pode ser alterado.");
 		}
-		aplicar(descarte, request);
-		aplicarRegras(descarte, descarte.getId());
-		analisarFoto(descarte);
-		return paraResponse(descarteRepository.save(descarte));
+		return gravar(descarte, request, foto, false);
 	}
 
 	@Transactional
@@ -157,11 +154,39 @@ public class DescarteService {
 		boolean validado = descarte.getStatus() == StatusValidacao.VALIDADO_IA;
 		Usuario usuario = descarte.getUsuario();
 		BigDecimal xp = descarte.getXpGanho();
+		String foto = descarte.getFotoUrl();
 		descarteRepository.delete(descarte);
 		if (validado) {
 			estornarSeAplicavel(usuario, xp);
 			descarteRepository.flush();
 			sincronizarSaldo(usuario);
+		}
+		armazenamentoFoto.apagarSeNossa(foto);
+	}
+
+	private DescarteResponse gravar(Descarte descarte, DescarteRequest request, MultipartFile foto, boolean criacao) {
+		String fotoAnterior = descarte.getFotoUrl();
+		aplicar(descarte, request);
+		ArmazenamentoFoto.FotoRecebida recebida = armazenamentoFoto.ler(foto);
+		if (criacao) {
+			descarte.setStatus(StatusValidacao.PENDENTE);
+		}
+		aplicarRegras(descarte, criacao ? SEM_ID : descarte.getId());
+		String nova = null;
+		try {
+			if (recebida != null) {
+				nova = armazenamentoFoto.guardar(recebida);
+				descarte.setFotoUrl(nova);
+			}
+			analisarFoto(descarte, recebida);
+			Descarte salvo = descarteRepository.save(descarte);
+			if (!Objects.equals(fotoAnterior, salvo.getFotoUrl())) {
+				armazenamentoFoto.apagarSeNossa(fotoAnterior);
+			}
+			return paraResponse(salvo);
+		} catch (RuntimeException ex) {
+			armazenamentoFoto.apagarSeNossa(nova);
+			throw ex;
 		}
 	}
 
@@ -208,18 +233,23 @@ public class DescarteService {
 		}
 	}
 
-	private void analisarFoto(Descarte descarte) {
-		if (descarte.getFotoUrl() == null) {
+	private void analisarFoto(Descarte descarte, ArmazenamentoFoto.FotoRecebida foto) {
+		if (foto == null && descarte.getFotoUrl() == null) {
 			descarte.setParecer(null);
 			descarte.setMensagemParecer(null);
 			return;
 		}
 		try {
-			ParecerFoto parecer = analisadorFoto.analisar(
-					descarte.getTipoResiduo().getNome(),
-					descarte.getTipoResiduo().getInstrucao(),
-					descarte.getFotoUrl()
-			);
+			ParecerFoto parecer = foto == null
+					? analisadorFoto.analisar(
+							descarte.getTipoResiduo().getNome(),
+							descarte.getTipoResiduo().getInstrucao(),
+							descarte.getFotoUrl())
+					: analisadorFoto.analisar(
+							descarte.getTipoResiduo().getNome(),
+							descarte.getTipoResiduo().getInstrucao(),
+							foto.conteudo(),
+							foto.nomeArquivo());
 			ParecerIa resultado = parecer == null || parecer.resultado() == null
 					? ParecerIa.INCONCLUSIVO
 					: parecer.resultado();

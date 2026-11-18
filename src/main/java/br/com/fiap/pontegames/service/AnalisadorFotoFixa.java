@@ -20,4 +20,9 @@ public class AnalisadorFotoFixa implements AnalisadorFoto {
 		return new ParecerFoto(ParecerIa.COMPATIVEL, "A foto parece compatível com " + nomeResiduo + ".");
 	}
 
+	@Override
+	public ParecerFoto analisar(String nomeResiduo, String instrucao, byte[] imagem, String nomeArquivo) {
+		return analisar(nomeResiduo, instrucao, nomeArquivo == null ? "" : nomeArquivo);
+	}
+
 }

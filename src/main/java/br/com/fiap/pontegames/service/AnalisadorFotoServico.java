@@ -68,6 +68,21 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		return reserva.analisar(nomeResiduo, instrucao, fotoUrl);
 	}
 
+	@Override
+	public ParecerFoto analisar(String nomeResiduo, String instrucao, byte[] imagem, String nomeArquivo) {
+		try {
+			if (imagem != null && imagem.length > 0) {
+				RespostaServicoIa resposta = consultar(imagem, nomeArquivo == null ? "foto.jpg" : nomeArquivo);
+				if (resposta != null && resposta.valido() != null) {
+					return traduzir(resposta, nomeResiduo);
+				}
+			}
+		} catch (RuntimeException ex) {
+			LOG.warn("Serviço de IA indisponível, usando o modelo local: {}", ex.getMessage());
+		}
+		return reserva.analisar(nomeResiduo, instrucao, imagem, nomeArquivo);
+	}
+
 	private byte[] baixar(String fotoUrl) {
 		URI uri = uriHttp(fotoUrl);
 		if (uri == null) {
@@ -79,7 +94,7 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 	private RespostaServicoIa consultar(byte[] imagem, String nomeArquivo) {
 		MultiValueMap<String, Object> corpo = new LinkedMultiValueMap<>();
 		HttpHeaders arquivo = new HttpHeaders();
-		arquivo.setContentType(MediaType.IMAGE_JPEG);
+		arquivo.setContentType(FormatoFoto.png(imagem) ? MediaType.IMAGE_PNG : MediaType.IMAGE_JPEG);
 		corpo.add("foto", new HttpEntity<>(new ByteArrayResource(imagem) {
 			@Override
 			public String getFilename() {

@@ -24,3 +24,6 @@ pontegames:
   jwt:
     segredo: pontegames-segredo-local-com-pelo-menos-32-bytes
     expiracao-minutos: 120
+  fotos:
+    diretorio: ${java.io.tmpdir}/pontegames-fotos-teste
+    tamanho-maximo-bytes: 512

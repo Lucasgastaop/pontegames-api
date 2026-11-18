@@ -13,15 +13,22 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockMultipartHttpServletRequestBuilder;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -29,6 +36,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class AnaliseFotoApiTest {
+
+	private static final byte[] JPEG = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD9};
+	private static final byte[] PNG = {
+			(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
+	};
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -122,6 +134,100 @@ class AnaliseFotoApiTest {
 				.andExpect(jsonPath("$.status").value("PENDENTE"));
 	}
 
+	@Test
+	void arquivoJpgViraFotoDaApi() throws Exception {
+		MvcResult criado = mockMvc.perform(formulario(
+						"POST", "/api/descartes", "1.10", "oleo.jpg", MediaType.IMAGE_JPEG_VALUE, JPEG))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.status").value("PENDENTE"))
+				.andExpect(jsonPath("$.parecer").value("COMPATIVEL"))
+				.andExpect(jsonPath("$.fotoUrl", containsString("/api/fotos/")))
+				.andExpect(jsonPath("$.fotoUrl", endsWith(".jpg")))
+				.andReturn();
+		String fotoUrl = valorJson(criado.getResponse().getContentAsString(), "fotoUrl");
+
+		mockMvc.perform(get(fotoUrl).header("Authorization", "Bearer " + tokenCidadao))
+				.andExpect(status().isOk())
+				.andExpect(content().contentType(MediaType.IMAGE_JPEG))
+				.andExpect(content().bytes(JPEG));
+		mockMvc.perform(get(fotoUrl))
+				.andExpect(status().isUnauthorized());
+		mockMvc.perform(get("/api/fotos/nao-existe.jpg").header("Authorization", "Bearer " + tokenCidadao))
+				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void arquivoPngIncompativelETipoRecusado() throws Exception {
+		MvcResult criado = mockMvc.perform(formulario(
+						"POST", "/api/descartes", "1.20", "incompativel.png", MediaType.IMAGE_PNG_VALUE, PNG))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String fotoUrl = valorJson(criado.getResponse().getContentAsString(), "fotoUrl");
+
+		mockMvc.perform(get("/api/descartes/" + idJson(criado.getResponse().getContentAsString()))
+						.header("Authorization", "Bearer " + tokenCidadao))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.parecer").value("INCOMPATIVEL"))
+				.andExpect(jsonPath("$.fotoUrl", endsWith(".png")));
+		mockMvc.perform(get(fotoUrl).header("Authorization", "Bearer " + tokenCidadao))
+				.andExpect(content().contentType(MediaType.IMAGE_PNG))
+				.andExpect(content().bytes(PNG));
+
+		mockMvc.perform(formulario("POST", "/api/descartes", "1.30", "nota.gif", "image/gif", "GIF89a".getBytes()))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensagem").value("Envie uma foto JPG ou PNG."));
+	}
+
+	@Test
+	void arquivoGrandeDemais() throws Exception {
+		byte[] grande = new byte[600];
+		grande[0] = (byte) 0xFF;
+		grande[1] = (byte) 0xD8;
+		grande[2] = (byte) 0xFF;
+
+		mockMvc.perform(formulario("POST", "/api/descartes", "1.40", "oleo.jpg", MediaType.IMAGE_JPEG_VALUE, grande))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.mensagem", containsString("máximo")));
+	}
+
+	@Test
+	void multipartSemArquivoNaoGeraParecer() throws Exception {
+		mockMvc.perform(formulario("POST", "/api/descartes", "1.60", null, null, null))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.parecer").value(nullValue()))
+				.andExpect(jsonPath("$.fotoUrl").value(nullValue()));
+	}
+
+	@Test
+	void atualizarComArquivoTrocaOParecerEApagaAFotoAntiga() throws Exception {
+		MvcResult criado = mockMvc.perform(formulario(
+						"POST", "/api/descartes", "1.70", "oleo.jpg", MediaType.IMAGE_JPEG_VALUE, JPEG))
+				.andExpect(status().isCreated())
+				.andReturn();
+		String corpo = criado.getResponse().getContentAsString();
+		String antiga = valorJson(corpo, "fotoUrl");
+		long id = idJson(corpo);
+
+		MvcResult atualizado = mockMvc.perform(formulario(
+						"PUT", "/api/descartes/" + id, "1.70", "incompativel.png", MediaType.IMAGE_PNG_VALUE, PNG))
+				.andExpect(status().isOk())
+				.andReturn();
+		String nova = valorJson(atualizado.getResponse().getContentAsString(), "fotoUrl");
+
+		mockMvc.perform(get("/api/descartes/" + id).header("Authorization", "Bearer " + tokenCidadao))
+				.andExpect(jsonPath("$.parecer").value("INCOMPATIVEL"))
+				.andExpect(jsonPath("$.status").value("PENDENTE"));
+		mockMvc.perform(get(antiga).header("Authorization", "Bearer " + tokenCidadao))
+				.andExpect(status().isNotFound());
+		mockMvc.perform(get(nova).header("Authorization", "Bearer " + tokenCidadao))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(delete("/api/descartes/" + id).header("Authorization", "Bearer " + tokenCidadao))
+				.andExpect(status().isNoContent());
+		mockMvc.perform(get(nova).header("Authorization", "Bearer " + tokenCidadao))
+				.andExpect(status().isNotFound());
+	}
+
 	private String loginDeGestor() throws Exception {
 		salvarGestor();
 		return login("elena.foto@pontegames.test");
@@ -175,6 +281,51 @@ class AnaliseFotoApiTest {
 				.andExpect(status().isCreated())
 				.andReturn();
 		String corpo = resultado.getResponse().getContentAsString();
+		int inicio = corpo.indexOf("\"id\":") + 5;
+		int fim = inicio;
+		while (fim < corpo.length() && Character.isDigit(corpo.charAt(fim))) {
+			fim++;
+		}
+		return Long.parseLong(corpo.substring(inicio, fim));
+	}
+
+	private MockMultipartHttpServletRequestBuilder formulario(
+			String metodo,
+			String url,
+			String peso,
+			String nome,
+			String tipo,
+			byte[] bytes
+	) {
+		MockMultipartHttpServletRequestBuilder pedido = multipart(url);
+		pedido.param("usuarioId", String.valueOf(cidadaoId));
+		pedido.param("pontoId", String.valueOf(pontoId));
+		pedido.param("tipoResiduoId", String.valueOf(tipoId));
+		pedido.param("pesoKg", peso);
+		pedido.header("Authorization", "Bearer " + tokenCidadao);
+		if (bytes != null) {
+			pedido.file(new MockMultipartFile("foto", nome, tipo, bytes));
+		}
+		if ("PUT".equals(metodo)) {
+			pedido.with(request -> {
+				request.setMethod("PUT");
+				return request;
+			});
+		}
+		return pedido;
+	}
+
+	private String valorJson(String corpo, String campo) {
+		String chave = "\"" + campo + "\":\"";
+		int inicio = corpo.indexOf(chave);
+		if (inicio < 0) {
+			throw new IllegalStateException("Campo ausente: " + campo);
+		}
+		inicio += chave.length();
+		return corpo.substring(inicio, corpo.indexOf('"', inicio));
+	}
+
+	private long idJson(String corpo) {
 		int inicio = corpo.indexOf("\"id\":") + 5;
 		int fim = inicio;
 		while (fim < corpo.length() && Character.isDigit(corpo.charAt(fim))) {

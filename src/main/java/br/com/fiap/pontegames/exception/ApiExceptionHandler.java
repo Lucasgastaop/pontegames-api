@@ -11,6 +11,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -33,6 +34,11 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(HttpMessageNotReadableException.class)
 	public ResponseEntity<ErroResponse> corpoInvalido(HttpMessageNotReadableException ex) {
 		return resposta(HttpStatus.BAD_REQUEST, "Corpo da requisição inválido.", List.of());
+	}
+
+	@ExceptionHandler(MaxUploadSizeExceededException.class)
+	public ResponseEntity<ErroResponse> arquivoGrande(MaxUploadSizeExceededException ex) {
+		return resposta(HttpStatus.BAD_REQUEST, "A foto deve ter no máximo 5 MB.", List.of());
 	}
 
 	@ExceptionHandler(MethodArgumentTypeMismatchException.class)

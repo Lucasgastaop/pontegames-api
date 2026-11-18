@@ -34,3 +34,6 @@ build/
 
 # Conexão local da FIAP. Não vai para o GitHub nem para o Render.
 src/main/resources/application-local.yml
+
+# Fotos enviadas pelo app. Ficam no disco da API.
+dados/
