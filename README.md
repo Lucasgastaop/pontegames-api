@@ -2,13 +2,66 @@
 
 API backend da plataforma Ponte Games (FIAP GS 2026/2 — CitizenTech). O cidadão entrega óleo de cozinha, lixo eletrônico ou pilhas num ecoponto. O descarte validado vira XP e sobe o nível.
 
-O modelo JPA usa as tabelas Oracle da entrega de database. A API sobe com `ddl-auto: none` e o schema entra pelos scripts de `db/`. O CRUD é paginado, com validação, erro padronizado e login JWT. A foto segue primeiro para o serviço de IA do grupo. Se esse serviço não responder, o Spring AI chama o Ollama local. O resultado da validação sai por RabbitMQ e vira aviso do cidadão.
+API publicada: https://pontegames-api.onrender.com
 
-Esta é a API consumida pelo app Mobile da disciplina. Repositório: https://github.com/Lucasgastaop/pontegames-api
+Swagger publicado: https://pontegames-api.onrender.com/swagger-ui.html
+
+Repositório: https://github.com/Lucasgastaop/pontegames-api
+
+Esta é a API que o app Mobile consome. O modelo JPA usa as tabelas Oracle da entrega de database. A API sobe com `ddl-auto: none` e o que a entrega de database não tinha entra pelos scripts de `db/`. O CRUD é paginado, com validação, erro padronizado e login JWT. A foto do descarte passa pelo serviço de IA do grupo e, se ele não responder, pelo Spring AI. O resultado da validação sai por RabbitMQ e vira aviso do cidadão.
 
 ## Grupo
 
 Turma 2TDSPX. Lucas Silva Gastão Pinheiro, RM 563960. Geovanne Coneglian Passos, RM 562673. Guilherme Soares de Almeida, RM 563143.
+
+## O problema e a solução
+
+Óleo de cozinha, eletrônico e pilha descartados no lugar errado contaminam a rede e somem da meta da cidade. O morador não tem incentivo, e a prefeitura não tem rastro. O Ponte Games liga o morador a um ecoponto credenciado: a entrega vira missão, a missão validada vira XP e o nível sobe. A prefeitura enxerga peso por ponto. A cooperativa recebe material separado.
+
+A solução atende o ODS 11 (cidades sustentáveis) e o ODS 12 (consumo responsável).
+
+O cidadão fotografa o resíduo no app. A API guarda o descarte como `PENDENTE`, pede um parecer da foto e calcula o XP da missão. Esse parecer ajuda o gestor, mas não credita sozinho: quem libera o XP é a gestora ou o admin, em `POST /api/descartes/{id}/validacao`. Assim a IA acelera a conferência e a fraude de foto não vira saldo. Depois que o banco confirma a validação, a API publica o resultado. O consumidor grava o aviso que o app mostra ao cidadão.
+
+## Por que essas escolhas
+
+A API é um backend Spring Boot porque o app precisa de um contrato HTTP estável, com papéis e paginação. Quatro entidades se relacionam no descarte: usuário, ecoponto, tipo de resíduo e o próprio descarte. O aviso é a quinta, nascida do evento.
+
+O schema fica no Oracle da disciplina de database. `ddl-auto: none` existe para a API não recriar tabela nem disparar gatilho por cima do que o banco já faz. No Oracle, `TRG_PG_CREDITAR_XP` credita e estorna o XP. A API calcula o mesmo XP e as mesmas travas (ponto inativo, teto diário, duplicata no dia) para responder 409 antes e para os testes em H2. No Oracle ela não soma o crédito de novo.
+
+O login é JWT, sem sessão no servidor, porque o app guarda o token e chama a API publicada. Há três papéis: cidadão, gestora e admin. O cidadão só mexe no próprio descarte. A gestora valida. O admin também cuida de usuários.
+
+Os DTOs são `record`, com Bean Validation no próprio contrato. O `@RestControllerAdvice` devolve o mesmo JSON para 400, 401, 403, 404 e 409.
+
+A parte distribuída é a opção A. Um microsserviço com Eureka seria outro sistema para um fluxo que cabe num evento: a validação já terminou no banco, e o aviso pode nascer depois. A fila `pontegames.descarte.resultado` recebe o evento só depois do commit. O consumidor grava o aviso. Mensagem repetida do mesmo descarte e do mesmo status não duplica a linha.
+
+O parecer da foto fica dentro do registro do descarte, não numa rota de chat. O serviço de IA do grupo lê a imagem e devolve se ela combina com o resíduo. O Spring AI, com o modelo `llama3.2` no Ollama, usa o mesmo contrato quando esse serviço não responde. Os dois caminhos gravam `parecer` e `mensagemParecer`.
+
+O deploy é a imagem do `Dockerfile` no Render, na URL publicada acima. O pool do Oracle fica em 2 sessões porque o usuário da FIAP tem teto baixo de sessões simultâneas.
+
+## Onde está cada requisito de Java Advanced
+
+| Requisito | Onde |
+| --- | --- |
+| 01. CRUD de pelo menos 3 entidades relacionadas, com paginação | Usuário, tipo de resíduo, ecoponto e descarte. O descarte aponta para os outros três |
+| 02. Bean Validation e erro padronizado | Records em `dto` e `ApiExceptionHandler` |
+| 03. JWT e papéis | `SecurityConfig`, login em `/api/auth/login`, papéis `CIDADAO`, `GESTOR` e `ADMIN` |
+| 04. Spring AI no fluxo | Parecer da foto ao criar ou alterar o descarte, em `AnalisadorFotoSpringAi` |
+| 05. Opção A, RabbitMQ | Fila `pontegames.descarte.resultado`, publicação depois do commit e consumo que grava o aviso |
+| 06. Swagger, README e app Mobile | Swagger na URL publicada, este README e a collection em `postman/` |
+
+## Integração com as outras disciplinas
+
+A mesma CitizenTech atravessa o grupo. Este repositório é a parte de Java.
+
+**Database.** As tabelas `tb_pg_usuario`, `tb_pg_ponto_coleta`, `tb_pg_tipo_residuo` e `tb_pg_descarte` vêm da entrega relacional. Os gatilhos `TRG_PG_REGRAS_DESCARTE` e `TRG_PG_CREDITAR_XP` continuam donos da trava e do saldo no Oracle. A API acrescenta só o que essa entrega não tinha, pelos scripts `db/oracle-senha.sql`, `db/oracle-parecer.sql` e `db/oracle-notificacao.sql`: senha, parecer da foto e aviso. O XP por kg da carga é 80 no óleo, 120 no eletrônico e 200 na pilha. O teto diário é 5 kg, 10 kg e 1 kg. O nível usa as mesmas faixas do banco.
+
+**IA generativa.** O Geovanne publica o serviço em https://ponte-games-ia-service.onrender.com/api/v1/ia/validar. A API envia a foto nesse endereço. O Spring AI deste backend é o segundo caminho, com o mesmo parecer, quando o serviço hiberna ou não responde.
+
+**Mobile.** O Guilherme consome esta API no app. A base publicada é https://pontegames-api.onrender.com. O contrato do app está na collection `postman/Ponte-Games-API.postman_collection.json`: login, perfil, tipos, ecopontos, descarte com foto e avisos. O header é `Authorization: Bearer`.
+
+**DevOps.** O `Dockerfile` gera a imagem com JDK 21. O Render sobe essa imagem e publica https://pontegames-api.onrender.com. A porta vem de `PORT`. As variáveis da seção de deploy são as da nuvem. O health check público é `GET /api/status`.
+
+**`.NET`.** A disciplina pede outro backend da mesma CitizenTech. A API que o app Mobile consome na Global Solution é esta, em Java.
 
 ## Endpoints
 
@@ -129,7 +182,7 @@ Validação, autenticação, acesso, ausência e conflito usam o mesmo corpo. `c
 
 ## Swagger e Postman
 
-Com a API no ar, a documentação interativa fica em http://localhost:8080/swagger-ui.html. O contrato OpenAPI fica em http://localhost:8080/v3/api-docs. Essas rotas são públicas. Para chamar o resto, entre com um usuário de teste, copie o `token` e cole em Authorize. O Swagger envia `Authorization: Bearer`.
+O Swagger da API publicada fica em https://pontegames-api.onrender.com/swagger-ui.html. O contrato OpenAPI fica em https://pontegames-api.onrender.com/v3/api-docs. Na máquina local, os mesmos caminhos ficam em http://localhost:8080/swagger-ui.html e http://localhost:8080/v3/api-docs. Essas rotas são públicas. Para chamar o resto, entre com um usuário de teste, copie o `token` e cole em Authorize. O Swagger envia `Authorization: Bearer`.
 
 A collection do app está em `postman/Ponte-Games-API.postman_collection.json`. No Collection Runner, rode as pastas de cima para baixo. A primeira request sorteia os pesos do dia para não esbarrar na regra de duplicata.
 
