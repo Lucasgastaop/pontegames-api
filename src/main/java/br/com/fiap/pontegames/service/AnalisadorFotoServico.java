@@ -33,13 +33,16 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 	private final ObjectMapper json;
 	private final String urlServico;
 	private final AnalisadorFotoSpringAi reserva;
+	private final boolean preferirSpring;
 
 	public AnalisadorFotoServico(
 			@Value("${pontegames.ia.url}") String urlServico,
+			@Value("${pontegames.ia.preferir-spring:false}") boolean preferirSpring,
 			ObjectMapper json,
 			AnalisadorFotoSpringAi reserva
 	) {
 		this.urlServico = urlServico;
+		this.preferirSpring = preferirSpring;
 		this.json = json;
 		this.reserva = reserva;
 		HttpClient http = HttpClient.newBuilder()
@@ -54,8 +57,20 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 
 	@Override
 	public ParecerFoto analisar(String nomeResiduo, String instrucao, String fotoUrl) {
+		byte[] imagem = null;
 		try {
-			byte[] imagem = baixar(fotoUrl);
+			imagem = baixar(fotoUrl);
+		} catch (RuntimeException ex) {
+			LOG.warn("Não foi possível baixar a foto para o parecer: {}", ex.getMessage());
+		}
+		if (preferirSpring) {
+			try {
+				return parecerSpring(nomeResiduo, instrucao, imagem, nome(fotoUrl), fotoUrl);
+			} catch (RuntimeException ex) {
+				LOG.warn("Spring AI indisponível, usando o serviço do grupo: {}", ex.getMessage());
+			}
+		}
+		try {
 			if (imagem != null && imagem.length > 0) {
 				RespostaServicoIa resposta = consultar(imagem, nome(fotoUrl));
 				if (resposta != null && resposta.valido() != null) {
@@ -63,13 +78,20 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 				}
 			}
 		} catch (RuntimeException ex) {
-			LOG.warn("Serviço de IA indisponível, usando o modelo local: {}", ex.getMessage());
+			LOG.warn("Serviço de IA indisponível, usando o Spring AI: {}", ex.getMessage());
 		}
-		return reserva.analisar(nomeResiduo, instrucao, fotoUrl);
+		return parecerSpring(nomeResiduo, instrucao, imagem, nome(fotoUrl), fotoUrl);
 	}
 
 	@Override
 	public ParecerFoto analisar(String nomeResiduo, String instrucao, byte[] imagem, String nomeArquivo) {
+		if (preferirSpring) {
+			try {
+				return reserva.analisar(nomeResiduo, instrucao, imagem, nomeArquivo);
+			} catch (RuntimeException ex) {
+				LOG.warn("Spring AI indisponível, usando o serviço do grupo: {}", ex.getMessage());
+			}
+		}
 		try {
 			if (imagem != null && imagem.length > 0) {
 				RespostaServicoIa resposta = consultar(imagem, nomeArquivo == null ? "foto.jpg" : nomeArquivo);
@@ -78,9 +100,22 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 				}
 			}
 		} catch (RuntimeException ex) {
-			LOG.warn("Serviço de IA indisponível, usando o modelo local: {}", ex.getMessage());
+			LOG.warn("Serviço de IA indisponível, usando o Spring AI: {}", ex.getMessage());
 		}
 		return reserva.analisar(nomeResiduo, instrucao, imagem, nomeArquivo);
+	}
+
+	private ParecerFoto parecerSpring(
+			String nomeResiduo,
+			String instrucao,
+			byte[] imagem,
+			String nomeArquivo,
+			String fotoUrl
+	) {
+		if (imagem != null && imagem.length > 0) {
+			return reserva.analisar(nomeResiduo, instrucao, imagem, nomeArquivo);
+		}
+		return reserva.analisar(nomeResiduo, instrucao, fotoUrl);
 	}
 
 	private byte[] baixar(String fotoUrl) {

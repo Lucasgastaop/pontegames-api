@@ -4,8 +4,17 @@ COPY pom.xml .
 COPY src ./src
 RUN mvn -B -DskipTests package
 
-FROM eclipse-temurin:21-jre
+FROM rabbitmq:3-alpine
+USER root
+RUN apk add --no-cache openjdk21-jre-headless ca-certificates \
+ && mkdir -p /app/dados/fotos
+COPY docker/rabbitmq.conf /etc/rabbitmq/rabbitmq.conf
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 WORKDIR /app
 COPY --from=build /app/target/pontegames-api-0.0.1-SNAPSHOT.jar app.jar
+ENV RABBITMQ_HOST=127.0.0.1 \
+    RABBITMQ_EMBUTIDO=true \
+    JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=35.0 -XX:+ExitOnOutOfMemoryError"
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["/entrypoint.sh"]

@@ -29,6 +29,8 @@ spring:
     openai:
       api-key: ${OPENAI_API_KEY:local}
       base-url: ${OPENAI_BASE_URL:http://localhost:11434/v1}
+      timeout: 45s
+      max-retries: 0
       chat:
         options:
           model: ${OPENAI_MODEL:llama3.2}
@@ -46,6 +48,7 @@ spring:
 pontegames:
   ia:
     url: ${IA_SERVICE_URL:https://ponte-games-ia-service.onrender.com/api/v1/ia/validar}
+    preferir-spring: ${PONTEGAMES_IA_PREFERIR_SPRING:false}
   fotos:
     diretorio: ${FOTOS_DIR:dados/fotos}
     tamanho-maximo-bytes: 5242880
