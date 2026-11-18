@@ -41,7 +41,7 @@ public class DescarteService {
 	private static final Logger LOG = LoggerFactory.getLogger(DescarteService.class);
 	private static final ZoneId ZONA = ZoneId.of("America/Sao_Paulo");
 	private static final long SEM_ID = -1L;
-	private static final String PARECER_INDISPONIVEL = "Não foi possível analisar a foto agora. O gestor confere na validação.";
+	private static final String PARECER_INDISPONIVEL = "Não foi possível analisar a foto agora. Envie outra imagem.";
 
 	private final DescarteRepository descarteRepository;
 	private final UsuarioRepository usuarioRepository;
@@ -127,24 +127,7 @@ public class DescarteService {
 					"Somente um descarte pendente pode ser validado. Status atual: " + descarte.getStatus() + "."
 			);
 		}
-		descarte.setStatus(novoStatus);
-		if (novoStatus == StatusValidacao.VALIDADO_IA) {
-			creditarSeAplicavel(descarte.getUsuario(), descarte.getXpGanho());
-		}
-		Descarte salvo = descarteRepository.saveAndFlush(descarte);
-		sincronizarSaldo(salvo.getUsuario());
-		Usuario usuario = salvo.getUsuario();
-		publicacaoResultadoDescarte.agendar(new ResultadoDescarte(
-				salvo.getId(),
-				usuario.getId(),
-				usuario.getNome(),
-				salvo.getTipoResiduo().getNome(),
-				salvo.getXpGanho(),
-				usuario.getXpTotal(),
-				usuario.getNivel(),
-				salvo.getStatus()
-		));
-		return paraResponse(salvo);
+		return paraResponse(fechar(descarte, novoStatus));
 	}
 
 	@Transactional
@@ -179,7 +162,8 @@ public class DescarteService {
 				descarte.setFotoUrl(nova);
 			}
 			analisarFoto(descarte, recebida);
-			Descarte salvo = descarteRepository.save(descarte);
+			Descarte salvo = descarteRepository.saveAndFlush(descarte);
+			salvo = decidirPeloParecer(salvo);
 			if (!Objects.equals(fotoAnterior, salvo.getFotoUrl())) {
 				armazenamentoFoto.apagarSeNossa(fotoAnterior);
 			}
@@ -277,6 +261,40 @@ public class DescarteService {
 	private String encurtar(String mensagem) {
 		String limpa = mensagem.trim();
 		return limpa.length() <= 500 ? limpa : limpa.substring(0, 500);
+	}
+
+	private Descarte decidirPeloParecer(Descarte descarte) {
+		if (descarte.getStatus() != StatusValidacao.PENDENTE) {
+			return descarte;
+		}
+		if (descarte.getParecer() == ParecerIa.COMPATIVEL) {
+			return fechar(descarte, StatusValidacao.VALIDADO_IA);
+		}
+		if (descarte.getParecer() == ParecerIa.INCOMPATIVEL) {
+			return fechar(descarte, StatusValidacao.REJEITADO);
+		}
+		return descarte;
+	}
+
+	private Descarte fechar(Descarte descarte, StatusValidacao novoStatus) {
+		descarte.setStatus(novoStatus);
+		if (novoStatus == StatusValidacao.VALIDADO_IA) {
+			creditarSeAplicavel(descarte.getUsuario(), descarte.getXpGanho());
+		}
+		Descarte salvo = descarteRepository.saveAndFlush(descarte);
+		sincronizarSaldo(salvo.getUsuario());
+		Usuario usuario = salvo.getUsuario();
+		publicacaoResultadoDescarte.agendar(new ResultadoDescarte(
+				salvo.getId(),
+				usuario.getId(),
+				usuario.getNome(),
+				salvo.getTipoResiduo().getNome(),
+				salvo.getXpGanho(),
+				usuario.getXpTotal(),
+				usuario.getNivel(),
+				salvo.getStatus()
+		));
+		return salvo;
 	}
 
 	private void creditarSeAplicavel(Usuario usuario, BigDecimal xp) {

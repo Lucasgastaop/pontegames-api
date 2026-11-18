@@ -87,17 +87,17 @@ class AnaliseFotoApiTest {
 	}
 
 	@Test
-	void fotoCompativelNaoCreditaXp() throws Exception {
+	void fotoCompativelCreditaXpNaHora() throws Exception {
 		long descarteId = criar(tokenCidadao, "/api/descartes", descarte("1.00", "https://storage.pontegames.test/oleo.jpg"));
 
 		mockMvc.perform(get("/api/descartes/" + descarteId).header("Authorization", "Bearer " + tokenCidadao))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.status").value("PENDENTE"))
+				.andExpect(jsonPath("$.status").value("VALIDADO_IA"))
 				.andExpect(jsonPath("$.parecer").value("COMPATIVEL"))
 				.andExpect(jsonPath("$.mensagemParecer").value("A foto parece compatível com Óleo de Cozinha."))
 				.andExpect(jsonPath("$.xpGanho").value(80));
 		mockMvc.perform(get("/api/usuarios/me").header("Authorization", "Bearer " + tokenCidadao))
-				.andExpect(jsonPath("$.xpTotal").value(0));
+				.andExpect(jsonPath("$.xpTotal").value(80));
 	}
 
 	@Test
@@ -107,13 +107,14 @@ class AnaliseFotoApiTest {
 		mockMvc.perform(get("/api/descartes/" + incompativel).header("Authorization", "Bearer " + tokenCidadao))
 				.andExpect(jsonPath("$.parecer").value("INCOMPATIVEL"))
 				.andExpect(jsonPath("$.mensagemParecer").value("A foto não parece ser Óleo de Cozinha."))
-				.andExpect(jsonPath("$.status").value("PENDENTE"));
+				.andExpect(jsonPath("$.status").value("REJEITADO"));
 
 		long falha = criar(tokenCidadao, "/api/descartes",
 				descarte("1.50", "https://storage.pontegames.test/falha.jpg"));
 		mockMvc.perform(get("/api/descartes/" + falha).header("Authorization", "Bearer " + tokenCidadao))
 				.andExpect(jsonPath("$.parecer").value("INCONCLUSIVO"))
-				.andExpect(jsonPath("$.mensagemParecer").value("Não foi possível analisar a foto agora. O gestor confere na validação."));
+				.andExpect(jsonPath("$.mensagemParecer").value("Não foi possível analisar a foto agora. Envie outra imagem."))
+				.andExpect(jsonPath("$.status").value("PENDENTE"));
 
 		long semFoto = criar(tokenCidadao, "/api/descartes", descarte("2.00", null));
 		mockMvc.perform(get("/api/descartes/" + semFoto).header("Authorization", "Bearer " + tokenCidadao))
@@ -123,7 +124,7 @@ class AnaliseFotoApiTest {
 
 	@Test
 	void atualizarFotoTrocaOParecer() throws Exception {
-		long descarteId = criar(tokenCidadao, "/api/descartes", descarte("1.00", "https://storage.pontegames.test/oleo.jpg"));
+		long descarteId = criar(tokenCidadao, "/api/descartes", descarte("1.00", "https://storage.pontegames.test/falha.jpg"));
 
 		mockMvc.perform(put("/api/descartes/" + descarteId)
 						.header("Authorization", "Bearer " + tokenCidadao)
@@ -131,7 +132,7 @@ class AnaliseFotoApiTest {
 						.content(descarte("1.00", "https://storage.pontegames.test/incompativel.jpg")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.parecer").value("INCOMPATIVEL"))
-				.andExpect(jsonPath("$.status").value("PENDENTE"));
+				.andExpect(jsonPath("$.status").value("REJEITADO"));
 	}
 
 	@Test
@@ -139,7 +140,7 @@ class AnaliseFotoApiTest {
 		MvcResult criado = mockMvc.perform(formulario(
 						"POST", "/api/descartes", "1.10", "oleo.jpg", MediaType.IMAGE_JPEG_VALUE, JPEG))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.status").value("PENDENTE"))
+				.andExpect(jsonPath("$.status").value("VALIDADO_IA"))
 				.andExpect(jsonPath("$.parecer").value("COMPATIVEL"))
 				.andExpect(jsonPath("$.fotoUrl", containsString("/api/fotos/")))
 				.andExpect(jsonPath("$.fotoUrl", endsWith(".jpg")))
@@ -168,6 +169,7 @@ class AnaliseFotoApiTest {
 						.header("Authorization", "Bearer " + tokenCidadao))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.parecer").value("INCOMPATIVEL"))
+				.andExpect(jsonPath("$.status").value("REJEITADO"))
 				.andExpect(jsonPath("$.fotoUrl", endsWith(".png")));
 		mockMvc.perform(get(fotoUrl).header("Authorization", "Bearer " + tokenCidadao))
 				.andExpect(content().contentType(MediaType.IMAGE_PNG))
@@ -201,7 +203,7 @@ class AnaliseFotoApiTest {
 	@Test
 	void atualizarComArquivoTrocaOParecerEApagaAFotoAntiga() throws Exception {
 		MvcResult criado = mockMvc.perform(formulario(
-						"POST", "/api/descartes", "1.70", "oleo.jpg", MediaType.IMAGE_JPEG_VALUE, JPEG))
+						"POST", "/api/descartes", "1.70", "falha.jpg", MediaType.IMAGE_JPEG_VALUE, JPEG))
 				.andExpect(status().isCreated())
 				.andReturn();
 		String corpo = criado.getResponse().getContentAsString();
@@ -216,7 +218,7 @@ class AnaliseFotoApiTest {
 
 		mockMvc.perform(get("/api/descartes/" + id).header("Authorization", "Bearer " + tokenCidadao))
 				.andExpect(jsonPath("$.parecer").value("INCOMPATIVEL"))
-				.andExpect(jsonPath("$.status").value("PENDENTE"));
+				.andExpect(jsonPath("$.status").value("REJEITADO"));
 		mockMvc.perform(get(antiga).header("Authorization", "Bearer " + tokenCidadao))
 				.andExpect(status().isNotFound());
 		mockMvc.perform(get(nova).header("Authorization", "Bearer " + tokenCidadao))

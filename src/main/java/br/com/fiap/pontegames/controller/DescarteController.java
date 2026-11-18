@@ -78,7 +78,7 @@ public class DescarteController {
 	}
 
 	@PostMapping("/{id}/validacao")
-	@Operation(summary = "Gestor ou admin valida ou rejeita um descarte pendente. VALIDADO_IA credita o XP.")
+	@Operation(summary = "Gestor ou admin libera um descarte que a IA deixou pendente. VALIDADO_IA credita o XP.")
 	public DescarteResponse validar(@PathVariable Long id, @Valid @RequestBody ValidacaoDescarteRequest request) {
 		return descarteService.validar(id, request.status());
 	}

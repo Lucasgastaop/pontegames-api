@@ -20,7 +20,7 @@ Turma 2TDSPX. Lucas Silva Gastão Pinheiro, RM 563960. Geovanne Coneglian Passos
 
 A solução atende o ODS 11 (cidades sustentáveis) e o ODS 12 (consumo responsável).
 
-O cidadão fotografa o resíduo no app. A API guarda o descarte como `PENDENTE`, pede um parecer da foto e calcula o XP da missão. Esse parecer ajuda o gestor, mas não credita sozinho: quem libera o XP é a gestora ou o admin, em `POST /api/descartes/{id}/validacao`. Assim a IA acelera a conferência e a fraude de foto não vira saldo. Depois que o banco confirma a validação, a API publica o resultado. O consumidor grava o aviso que o app mostra ao cidadão.
+O cidadão fotografa o resíduo no app. A API pede o parecer da foto na mesma resposta. Foto compatível vira `VALIDADO_IA` e o XP entra na hora. Foto incompatível volta `REJEITADO`, sem XP. Se a foto não der para decidir, o descarte fica `PENDENTE` e a gestora ainda pode liberar em `POST /api/descartes/{id}/validacao`. Depois que o banco confirma a validação, a API publica o resultado. O consumidor grava o aviso que o app mostra ao cidadão.
 
 ## Por que essas escolhas
 
@@ -112,7 +112,7 @@ Fora o status, o cadastro, o login e o Swagger, toda rota exige `Authorization: 
 
 O corpo JSON leva `usuarioId`, `pontoId`, `tipoResiduoId`, `pesoKg` e, se houver, `fotoUrl`. O `usuarioId` do cidadão tem de ser o do token. O peso é maior que zero, com no máximo 4 dígitos inteiros e 2 decimais. `fotoUrl` cabe em 500 caracteres.
 
-O XP da missão é peso vezes XP por kg, com duas casas. Ele aparece em `xpGanho` na hora do registro e só entra no saldo quando uma gestora ou um admin envia:
+O XP da missão é peso vezes XP por kg, com duas casas. Ele aparece em `xpGanho` na hora do registro. Foto `COMPATIVEL` grava o descarte como `VALIDADO_IA` e o XP entra no saldo na mesma resposta. Foto `INCOMPATIVEL` grava `REJEITADO` e o saldo não muda. Sem foto, ou com parecer `INCONCLUSIVO`, o descarte fica `PENDENTE`. Nesse caso uma gestora ou um admin ainda pode enviar:
 
 ```json
 {"status":"VALIDADO_IA"}
@@ -138,7 +138,7 @@ Descarte rejeitado fica de fora do teto e da repetição. O dia zera à meia-noi
 
 ## Parecer da foto
 
-A foto entra de dois jeitos. Os dois gravam o descarte como `PENDENTE` e preenchem `parecer` e `mensagemParecer`. O parecer não muda o status e não credita XP.
+A foto entra de dois jeitos. Os dois preenchem `parecer` e `mensagemParecer` na mesma resposta. `COMPATIVEL` valida e credita. `INCOMPATIVEL` rejeita e não credita. `INCONCLUSIVO` deixa `PENDENTE`.
 
 **URL.** No JSON, `fotoUrl` é um endereço `http` ou `https` público. A API baixa a imagem.
 

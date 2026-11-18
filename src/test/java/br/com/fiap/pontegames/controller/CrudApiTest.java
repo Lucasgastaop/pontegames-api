@@ -88,7 +88,7 @@ class CrudApiTest {
 				.andExpect(jsonPath("$.ativo").value(true));
 
 		String descarteJson = """
-				{"usuarioId":%d,"pontoId":%d,"tipoResiduoId":%d,"pesoKg":2.00,"fotoUrl":"https://storage.pontegames.test/descartes/1.jpg"}
+				{"usuarioId":%d,"pontoId":%d,"tipoResiduoId":%d,"pesoKg":2.00,"fotoUrl":"https://storage.pontegames.test/descartes/falha.jpg"}
 				""".formatted(usuarioId, pontoId, tipoId);
 		long descarteId = criar("/api/descartes", descarteJson);
 
@@ -104,7 +104,7 @@ class CrudApiTest {
 		comoAdmin(put("/api/descartes/" + descarteId)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
-								{"usuarioId":%d,"pontoId":%d,"tipoResiduoId":%d,"pesoKg":1.50,"fotoUrl":"https://storage.pontegames.test/descartes/1b.jpg","status":"VALIDADO_IA"}
+								{"usuarioId":%d,"pontoId":%d,"tipoResiduoId":%d,"pesoKg":1.50,"fotoUrl":"https://storage.pontegames.test/descartes/falha-b.jpg","status":"VALIDADO_IA"}
 								""".formatted(usuarioId, pontoId, tipoId)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.pesoKg").value(1.5))
