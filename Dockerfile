@@ -9,6 +9,7 @@ USER root
 RUN apk add --no-cache openjdk21-jre-headless ca-certificates \
  && mkdir -p /app/dados/fotos
 COPY docker/rabbitmq.conf /etc/rabbitmq/rabbitmq.conf
+RUN printf '%s\n' '[].' > /etc/rabbitmq/enabled_plugins
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 WORKDIR /app
