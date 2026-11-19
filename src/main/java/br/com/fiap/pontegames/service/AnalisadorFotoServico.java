@@ -63,6 +63,10 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		} catch (RuntimeException ex) {
 			LOG.warn("Não foi possível baixar a foto para o parecer: {}", ex.getMessage());
 		}
+		ParecerFoto fraca = FotoMinima.avaliar(imagem, nomeResiduo);
+		if (fraca != null) {
+			return fraca;
+		}
 		if (preferirSpring) {
 			try {
 				return parecerSpring(nomeResiduo, instrucao, imagem, nome(fotoUrl), fotoUrl);
@@ -85,6 +89,10 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 
 	@Override
 	public ParecerFoto analisar(String nomeResiduo, String instrucao, byte[] imagem, String nomeArquivo) {
+		ParecerFoto fraca = FotoMinima.avaliar(imagem, nomeResiduo);
+		if (fraca != null) {
+			return fraca;
+		}
 		if (preferirSpring) {
 			try {
 				return reserva.analisar(nomeResiduo, instrucao, imagem, nomeArquivo);

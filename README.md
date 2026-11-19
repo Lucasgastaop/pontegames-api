@@ -138,7 +138,7 @@ Descarte rejeitado fica de fora do teto e da repetição. O dia zera à meia-noi
 
 ## Parecer da foto
 
-A foto entra de dois jeitos. Os dois preenchem `parecer` e `mensagemParecer` na mesma resposta. `COMPATIVEL` valida e credita. `INCOMPATIVEL` rejeita e não credita. `INCONCLUSIVO` deixa `PENDENTE`.
+A foto entra de dois jeitos. Os dois preenchem `parecer` e `mensagemParecer` na mesma resposta. `COMPATIVEL` só vale quando a foto é real, nítida e o resíduo declarado é o assunto principal: óleo na garrafa, eletrônico ou pilha. Print, ícone, imagem pequena ou lixo misturado sem esse item volta `INCOMPATIVEL` e não credita. `INCONCLUSIVO` deixa `PENDENTE`.
 
 **URL.** No JSON, `fotoUrl` é um endereço `http` ou `https` público. A API baixa a imagem.
 

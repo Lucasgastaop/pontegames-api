@@ -19,12 +19,11 @@ import java.util.Locale;
 class AnalisadorFotoSpringAi {
 
 	private static final String INSTRUCAO = """
-			Você confere a foto de um descarte feito por um cidadão num ecoponto.
-			Compare a imagem com o tipo de resíduo declarado.
+			Você confere se a foto prova um descarte correto do resíduo declarado.
 			A primeira palavra da resposta deve ser exatamente uma destas: COMPATIVEL, INCOMPATIVEL, INCONCLUSIVO.
-			Use COMPATIVEL quando a foto mostra o resíduo declarado.
-			Use INCOMPATIVEL quando a foto mostra outra coisa.
-			Use INCONCLUSIVO quando a imagem não dá para decidir.
+			Use COMPATIVEL só quando a imagem é uma foto real, o resíduo declarado é o assunto principal e dá para reconhecê-lo com clareza: óleo de cozinha em garrafa ou recipiente, aparelho ou peça eletrônica, ou pilha e bateria.
+			Use INCOMPATIVEL quando for outro material, lixo misturado sem o item declarado, print, desenho, logo, cartaz, paisagem, prédios ou uma pessoa sem o resíduo.
+			Use INCONCLUSIVO quando a foto está escura, tremida, longe ou cortada e o material não dá para confirmar.
 			Depois da palavra, escreva uma frase em português, com no máximo 240 caracteres, dizendo ao cidadão o que a foto indica.
 			""";
 
