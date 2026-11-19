@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -34,8 +36,9 @@ import java.util.function.BiConsumer;
 public class AnalisadorFotoServico implements AnalisadorFoto {
 
 	private static final Logger LOG = LoggerFactory.getLogger(AnalisadorFotoServico.class);
-	private static final Duration DOWNLOAD = Duration.ofSeconds(4);
-	private static final Duration ESPERA = Duration.ofSeconds(16);
+	private static final Duration DOWNLOAD = Duration.ofSeconds(8);
+	private static final Duration CONEXAO = Duration.ofSeconds(25);
+	private static final Duration ESPERA = Duration.ofSeconds(65);
 
 	private final RestClient cliente;
 	private final RestClient download;
@@ -55,8 +58,8 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		this.preferirSpring = preferirSpring;
 		this.json = json;
 		this.reserva = reserva;
-		this.cliente = clienteHttp(ESPERA);
-		this.download = clienteHttp(DOWNLOAD);
+		this.cliente = clienteHttp(CONEXAO, ESPERA);
+		this.download = clienteHttp(DOWNLOAD, DOWNLOAD);
 	}
 
 	@Override
@@ -197,7 +200,37 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 				return nomeArquivo;
 			}
 		}, arquivo));
-		return postar(corpo);
+		return postar(corpo, System.nanoTime() + ESPERA.toNanos());
+	}
+
+	private RespostaServicoIa postar(MultiValueMap<String, Object> corpo, long limite) {
+		try {
+			return postar(corpo);
+		} catch (RestClientException ex) {
+			if (!valeRepetir(ex) || limite - System.nanoTime() < Duration.ofSeconds(20).toNanos()) {
+				throw ex;
+			}
+			LOG.warn("Serviço de IA indisponível ({}). Nova tentativa.", ex.getMessage());
+			esperar(Duration.ofSeconds(5));
+			return postar(corpo);
+		}
+	}
+
+	private boolean valeRepetir(RestClientException ex) {
+		if (ex instanceof RestClientResponseException resposta) {
+			int status = resposta.getStatusCode().value();
+			return status == 502 || status == 503 || status == 504;
+		}
+		return true;
+	}
+
+	private void esperar(Duration pausa) {
+		try {
+			Thread.sleep(pausa);
+		} catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("A espera pelo serviço de IA foi interrompida.");
+		}
 	}
 
 	private RespostaServicoIa postar(MultiValueMap<String, Object> corpo) {
@@ -238,15 +271,18 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		return new ParecerFoto(ParecerIa.INCOMPATIVEL, motivo);
 	}
 
-	private static RestClient clienteHttp(Duration leitura) {
+	private static RestClient clienteHttp(Duration conexao, Duration leitura) {
 		HttpClient http = HttpClient.newBuilder()
-				.connectTimeout(DOWNLOAD)
+				.connectTimeout(conexao)
 				.followRedirects(HttpClient.Redirect.NORMAL)
 				.build();
 		org.springframework.http.client.JdkClientHttpRequestFactory fabrica =
 				new org.springframework.http.client.JdkClientHttpRequestFactory(http);
 		fabrica.setReadTimeout(leitura);
-		return RestClient.builder().requestFactory(fabrica).build();
+		return RestClient.builder()
+				.requestFactory(fabrica)
+				.defaultHeader(HttpHeaders.USER_AGENT, "PonteGames/1.0")
+				.build();
 	}
 
 	private URI uriHttp(String fotoUrl) {
