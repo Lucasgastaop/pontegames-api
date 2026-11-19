@@ -34,7 +34,7 @@ Os DTOs são `record`, com Bean Validation no próprio contrato. O `@RestControl
 
 A parte distribuída é a opção A. Um microsserviço com Eureka seria outro sistema para um fluxo que cabe num evento: a validação já terminou no banco, e o aviso pode nascer depois. A fila `pontegames.descarte.resultado` recebe o evento só depois do commit. O consumidor grava o aviso. Mensagem repetida do mesmo descarte e do mesmo status não duplica a linha.
 
-O parecer da foto fica dentro do registro do descarte, não numa rota de chat. O serviço de IA do grupo lê a imagem e devolve se ela combina com o resíduo. O Spring AI usa o mesmo contrato: Ollama na máquina local e, na URL publicada, um modelo com visão configurado por variável. Os dois caminhos gravam `parecer` e `mensagemParecer`.
+O parecer da foto fica dentro do registro do descarte, não numa rota de chat. O serviço de IA do grupo lê a imagem e devolve se ela combina com o resíduo. Se ele não responder, o Spring AI lê a mesma foto: Ollama na máquina local e, na URL publicada, um modelo com visão configurado por variável. Os dois caminhos gravam `parecer` e `mensagemParecer`.
 
 O deploy é a imagem do `Dockerfile` no Render, na URL publicada acima. Essa imagem sobe o RabbitMQ junto da API, porque o plano gratuito não abre a porta do broker. O pool do Oracle fica em 2 sessões porque o usuário da FIAP tem teto baixo de sessões simultâneas.
 
@@ -138,7 +138,7 @@ Descarte rejeitado fica de fora do teto e da repetição. O dia zera à meia-noi
 
 ## Parecer da foto
 
-A foto entra de dois jeitos. Os dois preenchem `parecer` e `mensagemParecer` na mesma resposta. `COMPATIVEL` só vale quando a foto é real, nítida e o resíduo declarado é o assunto principal: óleo na garrafa, eletrônico ou pilha. Print, ícone, imagem pequena ou lixo misturado sem esse item volta `INCOMPATIVEL` e não credita. `INCONCLUSIVO` deixa `PENDENTE`.
+A foto entra de dois jeitos. Os dois preenchem `parecer` e `mensagemParecer` na mesma resposta. `COMPATIVEL` só vale quando a foto é real, nítida e o resíduo declarado é o assunto principal: óleo na garrafa, eletrônico ou pilha. Print, ícone, imagem com o lado menor abaixo de 400 pixels ou lixo misturado sem esse item volta `INCOMPATIVEL` e não credita. `INCONCLUSIVO` deixa `PENDENTE`.
 
 **URL.** No JSON, `fotoUrl` é um endereço `http` ou `https` público. A API baixa a imagem.
 
@@ -196,16 +196,16 @@ Para o Spring AI funcionar nessa URL, crie uma chave em https://ollama.com/setti
 OPENAI_BASE_URL=https://ollama.com/v1
 OPENAI_API_KEY=a chave do Ollama
 OPENAI_MODEL=gemma4:31b
-PONTEGAMES_IA_PREFERIR_SPRING=true
+PONTEGAMES_IA_PREFERIR_SPRING=false
 ```
 
-`gemma4:31b` lê a foto. O nome do modelo usa dois-pontos, não ponto. A foto é enviada primeiro ao serviço do Geovanne, com até 80 segundos de espera. Se esse serviço não responder, o Spring AI lê a mesma imagem. Não commite a chave. No Render, estas quatro variáveis valem o que está neste bloco. A tabela abaixo é o padrão de quem sobe a API na própria máquina.
+`gemma4:31b` fica de reserva. O nome do modelo usa dois-pontos, não ponto. Com a foto em mãos, o serviço do Geovanne é o primeiro e tem até 80 segundos. Se ele não responder, o Spring AI lê a mesma imagem. `PONTEGAMES_IA_PREFERIR_SPRING` não troca essa ordem. Não commite a chave. A tabela mostra o Oracle da FIAP. As outras linhas são o padrão de quem sobe a API na própria máquina.
 
 | Variável | Função | Padrão |
 | --- | --- | --- |
-| `ORACLE_URL` | JDBC do Oracle | `jdbc:oracle:thin:@localhost:1521/FREEPDB1` |
-| `ORACLE_USER` | usuário do banco | obrigatório |
-| `ORACLE_PASSWORD` | senha do banco | obrigatório |
+| `ORACLE_URL` | JDBC do Oracle da FIAP | `jdbc:oracle:thin:@oracle.fiap.com.br:1521:ORCL` |
+| `ORACLE_USER` | usuário do banco | `Rm562673` |
+| `ORACLE_PASSWORD` | senha do banco | `020502` |
 | `DB_POOL_SIZE` | sessões simultâneas no Oracle. O usuário da FIAP tem teto baixo | `2` |
 | `PORT` | porta HTTP | `8080` |
 | `JWT_SECRET` | segredo do token, com pelo menos 32 bytes | valor só da máquina local |
@@ -219,7 +219,7 @@ PONTEGAMES_IA_PREFERIR_SPRING=true
 | `OPENAI_BASE_URL` | endereço do Spring AI | `http://localhost:11434/v1` |
 | `OPENAI_API_KEY` | chave do modelo. No Ollama local pode ser `local` | `local` |
 | `OPENAI_MODEL` | modelo do Spring AI | `llama3.2` |
-| `PONTEGAMES_IA_PREFERIR_SPRING` | chama o Spring AI antes do serviço do grupo | `false` |
+| `PONTEGAMES_IA_PREFERIR_SPRING` | não altera a ordem da foto. A imagem vai primeiro ao serviço do grupo | `false` |
 
 ## Declaração de uso de IA
 
@@ -229,12 +229,12 @@ O parecer da foto consulta o serviço de IA do grupo, em `POST /api/v1/ia/valida
 
 JDK 21 ou superior e Maven 3.9+. No Oracle da FIAP, com as tabelas da entrega de database já criadas, rode uma vez os três scripts de `db/`, na ordem da seção de segurança. Suba o RabbitMQ com o comando da seção do requisito 5.
 
-O perfil `local` está ativo. Na máquina do grupo, a conexão fica em `src/main/resources/application-local.yml`. Esse arquivo fica fora do Git. Em outra máquina, defina as variáveis e suba a API:
+O perfil `local` está ativo. Na máquina do grupo, a conexão fica em `src/main/resources/application-local.yml`. Esse arquivo fica fora do Git. O Oracle da FIAP usado pela API publicada é o do Geovanne: usuário `Rm562673`, senha `020502`, em `jdbc:oracle:thin:@oracle.fiap.com.br:1521:ORCL`. Em outra máquina, defina as variáveis e suba a API:
 
 ```text
 $env:ORACLE_URL="jdbc:oracle:thin:@oracle.fiap.com.br:1521:ORCL"
-$env:ORACLE_USER="seu_rm"
-$env:ORACLE_PASSWORD="sua_senha"
+$env:ORACLE_USER="Rm562673"
+$env:ORACLE_PASSWORD="020502"
 mvn spring-boot:run
 ```
 
