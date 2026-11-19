@@ -4,6 +4,7 @@ import br.com.fiap.pontegames.dto.CampoErro;
 import br.com.fiap.pontegames.dto.ErroResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -59,6 +60,17 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(DataIntegrityViolationException.class)
 	public ResponseEntity<ErroResponse> integridade(DataIntegrityViolationException ex) {
 		return resposta(HttpStatus.CONFLICT, "Operação viola uma regra já gravada no banco.", List.of());
+	}
+
+	@ExceptionHandler(DataAccessException.class)
+	public ResponseEntity<ErroResponse> acessoDados(DataAccessException ex) {
+		String texto = String.valueOf(ex.getMostSpecificCause().getMessage());
+		if (texto.contains("ORA-20") || texto.contains("ORA-12899") || texto.contains("ORA-00001")) {
+			log.warn("Regra do banco ao gravar: {}", texto);
+			return resposta(HttpStatus.CONFLICT, "Operação viola uma regra já gravada no banco.", List.of());
+		}
+		log.error("Falha não tratada", ex);
+		return resposta(HttpStatus.INTERNAL_SERVER_ERROR, "Falha inesperada ao processar a requisição.", List.of());
 	}
 
 	@ExceptionHandler(NoResourceFoundException.class)

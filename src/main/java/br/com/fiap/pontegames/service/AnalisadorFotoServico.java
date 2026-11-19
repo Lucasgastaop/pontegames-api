@@ -60,7 +60,7 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		byte[] imagem = null;
 		try {
 			imagem = baixar(fotoUrl);
-		} catch (RuntimeException ex) {
+		} catch (Exception ex) {
 			LOG.warn("Não foi possível baixar a foto para o parecer: {}", ex.getMessage());
 		}
 		ParecerFoto fraca = FotoMinima.avaliar(imagem, nomeResiduo);
@@ -71,7 +71,7 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		if (preferirSpring) {
 			try {
 				return parecerSpring(nomeResiduo, instrucao, imagem, nome(fotoUrl), fotoUrl);
-			} catch (RuntimeException ex) {
+			} catch (Exception ex) {
 				springFalhou = true;
 				LOG.warn("Spring AI indisponível, usando o serviço do grupo: {}", ex.getMessage());
 			}
@@ -83,7 +83,7 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 					return traduzir(resposta, nomeResiduo);
 				}
 			}
-		} catch (RuntimeException ex) {
+		} catch (Exception ex) {
 			LOG.warn("Serviço de IA indisponível, usando o Spring AI: {}", ex.getMessage());
 		}
 		if (springFalhou) {
@@ -102,7 +102,7 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		if (preferirSpring) {
 			try {
 				return reserva.analisar(nomeResiduo, instrucao, imagem, nomeArquivo);
-			} catch (RuntimeException ex) {
+			} catch (Exception ex) {
 				springFalhou = true;
 				LOG.warn("Spring AI indisponível, usando o serviço do grupo: {}", ex.getMessage());
 			}
@@ -114,7 +114,7 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 					return traduzir(resposta, nomeResiduo);
 				}
 			}
-		} catch (RuntimeException ex) {
+		} catch (Exception ex) {
 			LOG.warn("Serviço de IA indisponível, usando o Spring AI: {}", ex.getMessage());
 		}
 		if (springFalhou) {

@@ -21,8 +21,12 @@ public class NotificadorDescarteRabbit implements NotificadorDescarte {
 
 	@Override
 	public void publicar(ResultadoDescarte evento) {
-		rabbitTemplate.convertAndSend(RabbitConfig.FILA_RESULTADO, evento);
-		LOG.info("Resultado do descarte {} publicado na fila {}.", evento.descarteId(), RabbitConfig.FILA_RESULTADO);
+		try {
+			rabbitTemplate.convertAndSend(RabbitConfig.FILA_RESULTADO, evento);
+			LOG.info("Resultado do descarte {} publicado na fila {}.", evento.descarteId(), RabbitConfig.FILA_RESULTADO);
+		} catch (RuntimeException ex) {
+			LOG.warn("Não foi possível publicar o descarte {} na fila: {}", evento.descarteId(), ex.getMessage());
+		}
 	}
 
 }

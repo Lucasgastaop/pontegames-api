@@ -5,7 +5,6 @@ import br.com.fiap.pontegames.model.ParecerIa;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 
 final class FotoMinima {
 
@@ -32,7 +31,7 @@ final class FotoMinima {
 					ParecerIa.INCOMPATIVEL,
 					"A foto precisa mostrar o " + nome + " de perto e nítido. Imagem pequena, print ou ícone não confirma o descarte."
 			);
-		} catch (IOException ex) {
+		} catch (Exception ex) {
 			return null;
 		}
 	}

@@ -180,7 +180,7 @@ public class DescarteService {
 				mensagem = mensagemPadrao(resultado, tipo.getNome());
 			}
 			return new ParecerFoto(resultado, encurtar(mensagem));
-		} catch (RuntimeException ex) {
+		} catch (Exception ex) {
 			LOG.warn("Falha ao analisar a foto do descarte: {}", ex.getMessage());
 			return new ParecerFoto(ParecerIa.INCONCLUSIVO, PARECER_INDISPONIVEL);
 		}
@@ -309,18 +309,26 @@ public class DescarteService {
 			creditarSeAplicavel(descarte.getUsuario(), descarte.getXpGanho());
 		}
 		Descarte salvo = descarteRepository.saveAndFlush(descarte);
-		sincronizarSaldo(salvo.getUsuario());
+		try {
+			sincronizarSaldo(salvo.getUsuario());
+		} catch (RuntimeException ex) {
+			LOG.warn("Não foi possível reler o saldo depois do descarte: {}", ex.getMessage());
+		}
 		Usuario usuario = salvo.getUsuario();
-		publicacaoResultadoDescarte.agendar(new ResultadoDescarte(
-				salvo.getId(),
-				usuario.getId(),
-				usuario.getNome(),
-				salvo.getTipoResiduo().getNome(),
-				salvo.getXpGanho(),
-				usuario.getXpTotal(),
-				usuario.getNivel(),
-				salvo.getStatus()
-		));
+		try {
+			publicacaoResultadoDescarte.agendar(new ResultadoDescarte(
+					salvo.getId(),
+					usuario.getId(),
+					usuario.getNome(),
+					salvo.getTipoResiduo().getNome(),
+					salvo.getXpGanho(),
+					usuario.getXpTotal(),
+					usuario.getNivel(),
+					salvo.getStatus()
+			));
+		} catch (RuntimeException ex) {
+			LOG.warn("Não foi possível agendar o aviso do descarte: {}", ex.getMessage());
+		}
 		return salvo;
 	}
 
