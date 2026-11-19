@@ -107,7 +107,8 @@ public class DescarteService {
 		garantirProprioDescarte(request.usuarioId());
 		ArmazenamentoFoto.FotoRecebida recebida = armazenamentoFoto.ler(foto);
 		ParecerFoto parecer = analisarAntesDeGravar(request, recebida);
-		return transacao.execute(status -> gravar(new Descarte(), request, recebida, parecer, true));
+		DescarteResponse salvo = transacao.execute(status -> gravar(new Descarte(), request, recebida, parecer, true));
+		return concluir(salvo, parecer);
 	}
 
 	public DescarteResponse atualizar(Long id, DescarteRequest request, MultipartFile foto) {
@@ -115,10 +116,11 @@ public class DescarteService {
 		transacao.executeWithoutResult(status -> conferirPendente(id));
 		ArmazenamentoFoto.FotoRecebida recebida = armazenamentoFoto.ler(foto);
 		ParecerFoto parecer = analisarAntesDeGravar(request, recebida);
-		return transacao.execute(status -> {
+		DescarteResponse salvo = transacao.execute(status -> {
 			conferirPendente(id);
 			return gravar(buscarEntidade(id), request, recebida, parecer, false);
 		});
+		return concluir(salvo, parecer);
 	}
 
 	@Transactional
@@ -207,7 +209,6 @@ public class DescarteService {
 			}
 			aplicarParecer(descarte, parecer);
 			Descarte salvo = descarteRepository.saveAndFlush(descarte);
-			salvo = decidirPeloParecer(salvo);
 			if (!Objects.equals(fotoAnterior, salvo.getFotoUrl())) {
 				armazenamentoFoto.apagarSeNossa(fotoAnterior);
 			}
@@ -288,6 +289,21 @@ public class DescarteService {
 			limpa = limpa.substring(0, limpa.length() - 1).trim();
 		}
 		return limpa;
+	}
+
+	private DescarteResponse concluir(DescarteResponse salvo, ParecerFoto parecer) {
+		if (salvo == null || salvo.status() != StatusValidacao.PENDENTE || parecer == null) {
+			return salvo;
+		}
+		if (parecer.resultado() != ParecerIa.COMPATIVEL && parecer.resultado() != ParecerIa.INCOMPATIVEL) {
+			return salvo;
+		}
+		try {
+			return transacao.execute(status -> paraResponse(decidirPeloParecer(buscarEntidade(salvo.id()))));
+		} catch (RuntimeException ex) {
+			LOG.warn("Não foi possível concluir a validação automática do descarte {}: {}", salvo.id(), ex.toString());
+			return salvo;
+		}
 	}
 
 	private Descarte decidirPeloParecer(Descarte descarte) {
