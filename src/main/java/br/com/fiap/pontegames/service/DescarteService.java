@@ -190,8 +190,10 @@ public class DescarteService {
 				mensagem = mensagemPadrao(resultado, tipo.getNome());
 			}
 			return new ParecerFoto(resultado, encurtar(mensagem));
-		} catch (Exception ex) {
-			LOG.warn("Falha ao analisar a foto do descarte: {}", ex.getMessage());
+		} catch (VirtualMachineError ex) {
+			throw ex;
+		} catch (Throwable ex) {
+			LOG.warn("Falha ao analisar a foto do descarte: {}", ex.toString());
 			return new ParecerFoto(ParecerIa.INCONCLUSIVO, PARECER_INDISPONIVEL);
 		}
 	}
