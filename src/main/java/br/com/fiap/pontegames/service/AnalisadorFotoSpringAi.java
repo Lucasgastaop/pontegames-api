@@ -21,11 +21,11 @@ class AnalisadorFotoSpringAi {
 	private static final String INSTRUCAO = """
 			Você confere a foto de um descarte feito por um cidadão num ecoponto.
 			Compare a imagem com o tipo de resíduo declarado.
-			resultado deve ser exatamente um destes valores: COMPATIVEL, INCOMPATIVEL, INCONCLUSIVO.
+			A primeira palavra da resposta deve ser exatamente uma destas: COMPATIVEL, INCOMPATIVEL, INCONCLUSIVO.
 			Use COMPATIVEL quando a foto mostra o resíduo declarado.
 			Use INCOMPATIVEL quando a foto mostra outra coisa.
 			Use INCONCLUSIVO quando a imagem não dá para decidir.
-			mensagem é uma frase em português, com no máximo 240 caracteres, dizendo ao cidadão o que a foto indica.
+			Depois da palavra, escreva uma frase em português, com no máximo 240 caracteres, dizendo ao cidadão o que a foto indica.
 			""";
 
 	private final ChatClient chatClient;
@@ -48,15 +48,12 @@ class AnalisadorFotoSpringAi {
 				Tipo declarado: %s.
 				Como esse resíduo deve ser entregue: %s.
 				""".formatted(nomeResiduo, instrucao);
-		ParecerModelo modelo = chatClient.prompt()
+		String texto = chatClient.prompt()
 				.system(INSTRUCAO)
 				.user(usuario -> preencher(usuario, pedido, fotoUrl))
 				.call()
-				.entity(ParecerModelo.class);
-		if (modelo == null) {
-			throw new IllegalStateException("O modelo não devolveu um parecer.");
-		}
-		return new ParecerFoto(ler(modelo.resultado()), modelo.mensagem());
+				.content();
+		return interpretar(texto);
 	}
 
 	ParecerFoto analisar(String nomeResiduo, String instrucao, byte[] imagem, String nomeArquivo) {
@@ -65,7 +62,7 @@ class AnalisadorFotoSpringAi {
 				Tipo declarado: %s.
 				Como esse resíduo deve ser entregue: %s.
 				""".formatted(nomeResiduo, instrucao);
-		ParecerModelo modelo = chatClient.prompt()
+		String texto = chatClient.prompt()
 				.system(INSTRUCAO)
 				.user(usuario -> {
 					if (imagem == null || imagem.length == 0) {
@@ -76,11 +73,8 @@ class AnalisadorFotoSpringAi {
 					usuario.text(pedido).media(mime(nome), new ByteArrayResource(imagem));
 				})
 				.call()
-				.entity(ParecerModelo.class);
-		if (modelo == null) {
-			throw new IllegalStateException("O modelo não devolveu um parecer.");
-		}
-		return new ParecerFoto(ler(modelo.resultado()), modelo.mensagem());
+				.content();
+		return interpretar(texto);
 	}
 
 	private void exigirModeloAlcancavel() {
@@ -135,19 +129,46 @@ class AnalisadorFotoSpringAi {
 		return MimeTypeUtils.IMAGE_JPEG;
 	}
 
-	private ParecerIa ler(String valor) {
-		if (valor == null || valor.isBlank()) {
-			return ParecerIa.INCONCLUSIVO;
+	static ParecerFoto interpretar(String texto) {
+		if (texto == null || texto.isBlank()) {
+			throw new IllegalStateException("O modelo não devolveu um parecer.");
 		}
-		String chave = Normalizer.normalize(valor, Normalizer.Form.NFD)
+		String chave = Normalizer.normalize(texto, Normalizer.Form.NFD)
 				.replaceAll("\\p{M}", "")
-				.toUpperCase(Locale.ROOT)
-				.trim();
-		return switch (chave) {
-			case "COMPATIVEL" -> ParecerIa.COMPATIVEL;
-			case "INCOMPATIVEL" -> ParecerIa.INCOMPATIVEL;
-			default -> ParecerIa.INCONCLUSIVO;
-		};
+				.toUpperCase(Locale.ROOT);
+		ParecerIa resultado = ParecerIa.INCONCLUSIVO;
+		String palavra = null;
+		if (chave.contains("INCOMPATIVEL")) {
+			resultado = ParecerIa.INCOMPATIVEL;
+			palavra = "INCOMPATIVEL";
+		} else if (chave.contains("COMPATIVEL")) {
+			resultado = ParecerIa.COMPATIVEL;
+			palavra = "COMPATIVEL";
+		} else if (chave.contains("INCONCLUSIVO")) {
+			palavra = "INCONCLUSIVO";
+		}
+		return new ParecerFoto(resultado, mensagem(texto, chave, palavra));
+	}
+
+	private static String mensagem(String original, String normalizado, String palavra) {
+		if (palavra == null) {
+			return null;
+		}
+		String maiusculo = original.toUpperCase(Locale.ROOT);
+		int inicio = maiusculo.indexOf(palavra);
+		String base = original;
+		if (inicio < 0) {
+			inicio = normalizado.indexOf(palavra);
+			base = normalizado;
+		}
+		if (inicio < 0) {
+			return null;
+		}
+		String resto = base.substring(inicio + palavra.length()).replaceAll("[^\\p{L}\\p{N}\\s]", " ").replaceAll("\\s+", " ").trim();
+		if (resto.isBlank()) {
+			return null;
+		}
+		return resto.length() <= 240 ? resto : resto.substring(0, 240).trim();
 	}
 
 }
