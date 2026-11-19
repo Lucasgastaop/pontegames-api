@@ -97,7 +97,7 @@ Na primeira subida, quem estiver sem senha recebe `senha123`. Se o banco estiver
 | Gestora | `elena.duarte@pontegames.test` | `senha123` |
 | Admin | `fabio.nunes@pontegames.test` | `senha123` |
 
-`POST /api/auth/login` recebe `email` e `senha` e devolve `token`, `tipoToken` (`Bearer`), `id`, `nome` e `tipo`. O token vale 120 minutos. O prazo sai de `pontegames.jwt.expiracao-minutos` e o segredo de `JWT_SECRET`.
+`POST /api/auth/login` recebe `email` e `senha` e devolve `token`, `tipoToken` (`Bearer`), `id`, `nome` e `tipo`. O token vale 120 minutos. Na máquina local, se `JWT_SECRET` não for definida, o segredo é `pontegames-segredo-local-com-pelo-menos-32-bytes`. O segredo da URL publicada fica só no Render. Quem chama a API usa o `token` do login, não o segredo.
 
 `POST /api/auth/registrar` recebe `nome`, `email`, `cpf` no formato `000.000.000-00` e `senha` de 6 a 72 caracteres. O cadastro público nasce cidadão.
 
@@ -208,7 +208,7 @@ PONTEGAMES_IA_PREFERIR_SPRING=false
 | `ORACLE_PASSWORD` | senha do banco | `020502` |
 | `DB_POOL_SIZE` | sessões simultâneas no Oracle. O usuário da FIAP tem teto baixo | `2` |
 | `PORT` | porta HTTP | `8080` |
-| `JWT_SECRET` | segredo do token, com pelo menos 32 bytes | valor só da máquina local |
+| `JWT_SECRET` | segredo que assina o token na máquina local. A URL publicada guarda o dela no Render | `pontegames-segredo-local-com-pelo-menos-32-bytes` |
 | `IA_SERVICE_URL` | serviço de IA do grupo | `https://ponte-games-ia-service.onrender.com/api/v1/ia/validar` |
 | `FOTOS_DIR` | pasta dos arquivos enviados | `dados/fotos` |
 | `RABBITMQ_EMBUTIDO` | sobe o RabbitMQ dentro da imagem publicada | `true` na imagem |
