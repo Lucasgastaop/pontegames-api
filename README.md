@@ -8,7 +8,7 @@ Swagger publicado: https://pontegames-api.onrender.com/swagger-ui.html
 
 Repositório: https://github.com/Lucasgastaop/pontegames-api
 
-Esta é a API que o app Mobile consome. O modelo JPA usa as tabelas Oracle da entrega de database. A API sobe com `ddl-auto: none` e o que a entrega de database não tinha entra pelos scripts de `db/`. O CRUD é paginado, com validação, erro padronizado e login JWT. A foto do descarte passa pelo serviço de IA do grupo e, se ele não responder, pelo Spring AI. O resultado da validação sai por RabbitMQ e vira aviso do cidadão.
+Esta é a API que o app Mobile consome. O modelo JPA usa as tabelas Oracle da entrega de database. A API sobe com `ddl-auto: none` e o que a entrega de database não tinha entra pelos scripts de `db/`. O CRUD é paginado, com validação, erro padronizado e login JWT. Na URL publicada a foto passa primeiro pelo Spring AI. Se ele não responder, a API chama o serviço de IA do grupo. Na máquina local a ordem é a inversa. O resultado da validação sai por RabbitMQ e vira aviso do cidadão.
 
 ## Grupo
 
@@ -28,7 +28,7 @@ A API é um backend Spring Boot porque o app precisa de um contrato HTTP estáve
 
 O schema fica no Oracle da disciplina de database. `ddl-auto: none` existe para a API não recriar tabela nem disparar gatilho por cima do que o banco já faz. No Oracle, `TRG_PG_CREDITAR_XP` credita e estorna o XP. A API calcula o mesmo XP e as mesmas travas (ponto inativo, teto diário, duplicata no dia) para responder 409 antes e para os testes em H2. No Oracle ela não soma o crédito de novo.
 
-O login é JWT, sem sessão no servidor, porque o app guarda o token e chama a API publicada. Há três papéis: cidadão, gestora e admin. O cidadão só mexe no próprio descarte. A gestora valida. O admin também cuida de usuários.
+O login é JWT, sem sessão no servidor, porque o app guarda o token e chama a API publicada. Há três papéis: cidadão, gestora e admin. O cidadão só mexe no próprio descarte. A foto compatível valida sozinha. A gestora libera o que ficou pendente. O admin também cuida de usuários.
 
 Os DTOs são `record`, com Bean Validation no próprio contrato. O `@RestControllerAdvice` devolve o mesmo JSON para 400, 401, 403, 404 e 409.
 
@@ -55,7 +55,7 @@ A mesma CitizenTech atravessa o grupo. Este repositório é a parte de Java.
 
 **Database.** As tabelas `tb_pg_usuario`, `tb_pg_ponto_coleta`, `tb_pg_tipo_residuo` e `tb_pg_descarte` vêm da entrega relacional. Os gatilhos `TRG_PG_REGRAS_DESCARTE` e `TRG_PG_CREDITAR_XP` continuam donos da trava e do saldo no Oracle. A API acrescenta só o que essa entrega não tinha, pelos scripts `db/oracle-senha.sql`, `db/oracle-parecer.sql` e `db/oracle-notificacao.sql`: senha, parecer da foto e aviso. O XP por kg da carga é 80 no óleo, 120 no eletrônico e 200 na pilha. O teto diário é 5 kg, 10 kg e 1 kg. O nível usa as mesmas faixas do banco.
 
-**IA generativa.** O Geovanne publica o serviço em https://ponte-games-ia-service.onrender.com/api/v1/ia/validar. A API envia a foto nesse endereço. O Spring AI deste backend é o segundo caminho, com o mesmo parecer, quando o serviço hiberna ou não responde.
+**IA generativa.** O Geovanne publica o serviço em https://ponte-games-ia-service.onrender.com/api/v1/ia/validar. Na URL publicada, com `PONTEGAMES_IA_PREFERIR_SPRING=true`, o Spring AI lê a foto primeiro, no modelo `gemma4:31b` do Ollama. O serviço do grupo entra se esse modelo não responder. Na máquina local o serviço do grupo vem primeiro e o Ollama `llama3.2` fica de reserva.
 
 **Mobile.** O Guilherme consome esta API no app. A base publicada é https://pontegames-api.onrender.com. O contrato do app está na collection `postman/Ponte-Games-API.postman_collection.json`: login, perfil, tipos, ecopontos, descarte com foto e avisos. O header é `Authorization: Bearer`.
 
@@ -148,7 +148,7 @@ A API guarda o arquivo em `FOTOS_DIR` (padrão `dados/fotos`) e devolve `fotoUrl
 
 Sem foto, `parecer` e `mensagemParecer` ficam vazios. Com foto, `parecer` é `COMPATIVEL`, `INCOMPATIVEL` ou `INCONCLUSIVO`.
 
-A imagem segue no campo `foto` para o serviço de IA do grupo, `POST /api/v1/ia/validar`. O endereço padrão é `https://ponte-games-ia-service.onrender.com/api/v1/ia/validar` e troca com `IA_SERVICE_URL`. Cada leitura espera até 60 segundos. Se o serviço responder 502 ou 503, a API espera 15 segundos e tenta de novo, porque o plano gratuito do Render hiberna. Se o serviço não responder, o Spring AI lê os mesmos bytes da foto. Na máquina local o modelo é o Ollama `llama3.2`, em `http://localhost:11434/v1`. Na URL publicada o Ollama não existe: o Render precisa de `OPENAI_BASE_URL`, `OPENAI_API_KEY` e `OPENAI_MODEL` de um modelo que aceite imagem. Com `PONTEGAMES_IA_PREFERIR_SPRING=true`, o Spring AI roda antes do serviço do grupo. Se os dois caminhos falharem, o descarte é gravado mesmo assim, com parecer inconclusivo e a frase `Não foi possível analisar a foto agora. O gestor confere na validação.`
+A imagem segue no campo `foto` para quem analisa, nunca como URL. O serviço de IA do grupo recebe `POST /api/v1/ia/validar`. O endereço padrão é `https://ponte-games-ia-service.onrender.com/api/v1/ia/validar` e troca com `IA_SERVICE_URL`. Cada leitura espera até 60 segundos. Se o serviço responder 502 ou 503, a API espera 15 segundos e tenta de novo, porque o plano gratuito do Render hiberna. Na máquina local a reserva é o Ollama `llama3.2`, em `http://localhost:11434/v1`. Na URL publicada o Spring AI usa o Ollama na nuvem: `OPENAI_BASE_URL` `https://ollama.com/v1`, `OPENAI_MODEL` `gemma4:31b` e a chave em `OPENAI_API_KEY`. Com `PONTEGAMES_IA_PREFERIR_SPRING=true`, o Spring AI roda antes do serviço do grupo. Se os dois caminhos falharem, o descarte é gravado mesmo assim, com parecer inconclusivo e a frase `Não foi possível analisar a foto agora. Envie outra imagem.`
 
 ## Requisito 5 — opção A (RabbitMQ)
 
@@ -160,7 +160,7 @@ Suba o broker. A porta 15672 abre o painel em http://localhost:15672, usuário `
 docker run -d --hostname pontegames-rabbit --name pontegames-rabbit -p 5672:5672 -p 15672:15672 rabbitmq:3-management
 ```
 
-Quando uma gestora ou um admin valida ou rejeita um descarte, a API publica o resultado na fila durável `pontegames.descarte.resultado` depois que o banco confirma a transação. O consumidor grava o aviso do cidadão. `GET /api/notificacoes` devolve só os avisos de quem está logado, do mais recente para o mais antigo. Validar avisa o resíduo, o XP ganho e o nível. Rejeitar avisa que nenhum XP entrou. Se a mesma mensagem chegar de novo para o mesmo descarte e o mesmo status, o aviso não duplica.
+Foto `COMPATIVEL` ou `INCOMPATIVEL` publica o resultado na hora. Sem foto, ou com parecer `INCONCLUSIVO`, o descarte fica `PENDENTE` e a publicação acontece quando uma gestora ou um admin valida ou rejeita. Nos dois casos a API publica na fila durável `pontegames.descarte.resultado` depois que o banco confirma a transação. O consumidor grava o aviso do cidadão. `GET /api/notificacoes` devolve só os avisos de quem está logado, do mais recente para o mais antigo. Validar avisa o resíduo, o XP ganho e o nível. Rejeitar avisa que nenhum XP entrou. Se a mesma mensagem chegar de novo para o mesmo descarte e o mesmo status, o aviso não duplica.
 
 Na máquina local, host, porta, usuário e senha saem de `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER` e `RABBITMQ_PASSWORD`. O padrão é `localhost:5672` com `guest`/`guest`. Na imagem publicada, o `Dockerfile` sobe um RabbitMQ no mesmo container, em `127.0.0.1:5672`, porque o plano gratuito do Render não publica a porta AMQP. O broker só vive enquanto a instância está acordada. O consumidor está no mesmo processo, então o aviso é gravado na hora da validação. Os testes entregam o evento no mesmo processo e não precisam do broker.
 
@@ -190,16 +190,16 @@ A collection do app está em `postman/Ponte-Games-API.postman_collection.json`. 
 
 A API publicada fica em https://pontegames-api.onrender.com. O Swagger público fica em https://pontegames-api.onrender.com/swagger-ui.html. O Render sobe a imagem do `Dockerfile`: build com Maven e JDK 21, execução com JRE 21 e RabbitMQ no mesmo container. A porta HTTP é a variável `PORT`. Sem ela, a API escuta 8080. No plano gratuito o serviço dorme sem uso e a primeira chamada pode levar cerca de um minuto.
 
-Para o Spring AI funcionar nessa URL, crie uma chave gratuita em https://aistudio.google.com/apikey e grave estas variáveis no serviço do Render, sem aspas:
+Para o Spring AI funcionar nessa URL, crie uma chave em https://ollama.com/settings/keys e grave estas variáveis no serviço do Render, sem aspas:
 
 ```text
-OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
-OPENAI_API_KEY=a chave do AI Studio
-OPENAI_MODEL=gemini-2.5-flash
+OPENAI_BASE_URL=https://ollama.com/v1
+OPENAI_API_KEY=a chave do Ollama
+OPENAI_MODEL=gemma4:31b
 PONTEGAMES_IA_PREFERIR_SPRING=true
 ```
 
-`gemini-2.5-flash` lê a foto. Com `PONTEGAMES_IA_PREFERIR_SPRING=true`, cada descarte com imagem passa pelo Spring AI antes do serviço do Geovanne. Se o modelo falhar, o serviço do grupo continua como reserva. Não commite a chave.
+`gemma4:31b` lê a foto. O nome do modelo usa dois-pontos, não ponto. Com `PONTEGAMES_IA_PREFERIR_SPRING=true`, cada descarte com imagem passa pelo Spring AI antes do serviço do Geovanne. Se o modelo falhar, o serviço do grupo continua como reserva. Não commite a chave. No Render, estas quatro variáveis valem o que está neste bloco. A tabela abaixo é o padrão de quem sobe a API na própria máquina.
 
 | Variável | Função | Padrão |
 | --- | --- | --- |
@@ -223,7 +223,7 @@ PONTEGAMES_IA_PREFERIR_SPRING=true
 
 ## Declaração de uso de IA
 
-O parecer da foto consulta o serviço de IA do grupo, em `POST /api/v1/ia/validar`, e o Spring AI com `ChatClient`. Na máquina local o Spring AI usa o Ollama, modelo `llama3.2`, e a chave `local` não é segredo. Na URL publicada o Spring AI usa o modelo definido por `OPENAI_BASE_URL`, `OPENAI_API_KEY` e `OPENAI_MODEL`. O desenvolvimento do código teve apoio do Cursor. O grupo revisou o que está no repositório e responde pela solução.
+O parecer da foto consulta o serviço de IA do grupo, em `POST /api/v1/ia/validar`, e o Spring AI com `ChatClient`. Na máquina local o Spring AI usa o Ollama, modelo `llama3.2`, e a chave `local` não é segredo. Na URL publicada o Spring AI usa o Ollama em `https://ollama.com/v1`, modelo `gemma4:31b`. O desenvolvimento do código teve apoio do Cursor. O grupo revisou o que está no repositório e responde pela solução.
 
 ## Como rodar
 
