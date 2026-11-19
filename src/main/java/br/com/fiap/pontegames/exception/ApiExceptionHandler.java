@@ -70,7 +70,7 @@ public class ApiExceptionHandler {
 			return resposta(HttpStatus.CONFLICT, "Operação viola uma regra já gravada no banco.", List.of());
 		}
 		log.error("Falha não tratada", ex);
-		return resposta(HttpStatus.INTERNAL_SERVER_ERROR, "Falha inesperada ao processar a requisição.", List.of());
+		return resposta(HttpStatus.INTERNAL_SERVER_ERROR, "Falha inesperada ao processar a requisição. " + resumir(ex), List.of());
 	}
 
 	@ExceptionHandler(NoResourceFoundException.class)
@@ -81,7 +81,24 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ErroResponse> inesperado(Exception ex) {
 		log.error("Falha não tratada", ex);
-		return resposta(HttpStatus.INTERNAL_SERVER_ERROR, "Falha inesperada ao processar a requisição.", List.of());
+		return resposta(HttpStatus.INTERNAL_SERVER_ERROR, "Falha inesperada ao processar a requisição. " + resumir(ex), List.of());
+	}
+
+	private String resumir(Exception ex) {
+		Throwable causa = ex;
+		while (causa.getCause() != null && causa.getCause() != causa) {
+			causa = causa.getCause();
+		}
+		String detalhe = causa.getClass().getSimpleName();
+		String texto = causa.getMessage();
+		if (texto == null || texto.isBlank()) {
+			return detalhe;
+		}
+		String linha = texto.replaceAll("\\s+", " ").trim();
+		if (linha.length() > 160) {
+			linha = linha.substring(0, 160).trim();
+		}
+		return detalhe + ": " + linha;
 	}
 
 	private ResponseEntity<ErroResponse> resposta(HttpStatus status, String mensagem, List<CampoErro> campos) {

@@ -107,8 +107,16 @@ public class DescarteService {
 		garantirProprioDescarte(request.usuarioId());
 		ArmazenamentoFoto.FotoRecebida recebida = armazenamentoFoto.ler(foto);
 		ParecerFoto parecer = analisarAntesDeGravar(request, recebida);
-		DescarteResponse salvo = transacao.execute(status -> gravar(new Descarte(), request, recebida, parecer, true));
-		return concluir(salvo, parecer);
+		try {
+			DescarteResponse salvo = transacao.execute(status -> gravar(new Descarte(), request, recebida, parecer, true));
+			return concluir(salvo, parecer);
+		} catch (ResponseStatusException ex) {
+			throw ex;
+		} catch (RuntimeException ex) {
+			LOG.error("Falha ao registrar o descarte com o parecer da foto", ex);
+			ParecerFoto reserva = new ParecerFoto(ParecerIa.INCONCLUSIVO, PARECER_INDISPONIVEL);
+			return transacao.execute(status -> gravar(new Descarte(), request, recebida, reserva, true));
+		}
 	}
 
 	public DescarteResponse atualizar(Long id, DescarteRequest request, MultipartFile foto) {
