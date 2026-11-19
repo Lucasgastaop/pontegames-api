@@ -118,7 +118,7 @@ O XP da missão é peso vezes XP por kg, com duas casas. Ele aparece em `xpGanho
 {"status":"VALIDADO_IA"}
 ```
 
-`REJEITADO` deixa o saldo como está. Outro status nessa rota responde 400. Só um descarte `PENDENTE` pode ser validado ou alterado. Apagar um descarte `VALIDADO_IA` tira o XP do saldo. No Oracle, os gatilhos da entrega de database mantêm esse saldo, e a API não soma o mesmo crédito outra vez. No H2 dos testes, a própria API credita na validação e estorna nessa exclusão.
+`REJEITADO` deixa o saldo como está. Outro status nessa rota responde 400. O `PUT` altera o descarte em qualquer status e mantém o status atual. Só um descarte `PENDENTE` pode ser validado pela gestora. Apagar um descarte `VALIDADO_IA` tira o XP do saldo. No Oracle, os gatilhos da entrega de database mantêm esse saldo, e a API não soma o mesmo crédito outra vez. No H2 dos testes, a própria API credita na validação e estorna nessa exclusão.
 
 Estas situações respondem 409:
 

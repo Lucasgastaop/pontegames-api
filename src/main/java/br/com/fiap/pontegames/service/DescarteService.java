@@ -121,11 +121,11 @@ public class DescarteService {
 
 	public DescarteResponse atualizar(Long id, DescarteRequest request, MultipartFile foto) {
 		garantirProprioDescarte(request.usuarioId());
-		transacao.executeWithoutResult(status -> conferirPendente(id));
+		transacao.executeWithoutResult(status -> conferirDono(id));
 		ArmazenamentoFoto.FotoRecebida recebida = armazenamentoFoto.ler(foto);
 		ParecerFoto parecer = analisarAntesDeGravar(request, recebida);
 		DescarteResponse salvo = transacao.execute(status -> {
-			conferirPendente(id);
+			conferirDono(id);
 			return gravar(buscarEntidade(id), request, recebida, parecer, false);
 		});
 		return concluir(salvo, parecer);
@@ -164,12 +164,9 @@ public class DescarteService {
 		armazenamentoFoto.apagarSeNossa(foto);
 	}
 
-	private void conferirPendente(Long id) {
+	private void conferirDono(Long id) {
 		Descarte descarte = buscarEntidade(id);
 		garantirProprioDescarte(descarte.getUsuario().getId());
-		if (descarte.getStatus() != StatusValidacao.PENDENTE) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "Somente um descarte pendente pode ser alterado.");
-		}
 	}
 
 	private ParecerFoto analisarAntesDeGravar(DescarteRequest request, ArmazenamentoFoto.FotoRecebida foto) {
