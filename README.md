@@ -8,7 +8,7 @@ Swagger publicado: https://pontegames-api.onrender.com/swagger-ui.html
 
 Repositório: https://github.com/Lucasgastaop/pontegames-api
 
-Esta é a API que o app Mobile consome. O modelo JPA usa as tabelas Oracle da entrega de database. A API sobe com `ddl-auto: none` e o que a entrega de database não tinha entra pelos scripts de `db/`. O CRUD é paginado, com validação, erro padronizado e login JWT. Na URL publicada a foto passa primeiro pelo Spring AI. Se ele não responder, a API chama o serviço de IA do grupo. Na máquina local a ordem é a inversa. O resultado da validação sai por RabbitMQ e vira aviso do cidadão.
+Esta é a API que o app Mobile consome. O modelo JPA usa as tabelas Oracle da entrega de database. A API sobe com `ddl-auto: none` e o que a entrega de database não tinha entra pelos scripts de `db/`. O CRUD é paginado, com validação, erro padronizado e login JWT. A foto é lida ao mesmo tempo pelo Spring AI e pelo serviço de IA do grupo. Vale a primeira resposta. A leitura para aos 16 segundos e o download da URL aos 4, para o descarte responder em até 25 segundos. O resultado da validação sai por RabbitMQ e vira aviso do cidadão.
 
 ## Grupo
 
@@ -55,7 +55,7 @@ A mesma CitizenTech atravessa o grupo. Este repositório é a parte de Java.
 
 **Database.** As tabelas `tb_pg_usuario`, `tb_pg_ponto_coleta`, `tb_pg_tipo_residuo` e `tb_pg_descarte` vêm da entrega relacional. Os gatilhos `TRG_PG_REGRAS_DESCARTE` e `TRG_PG_CREDITAR_XP` continuam donos da trava e do saldo no Oracle. A API acrescenta só o que essa entrega não tinha, pelos scripts `db/oracle-senha.sql`, `db/oracle-parecer.sql` e `db/oracle-notificacao.sql`: senha, parecer da foto e aviso. O XP por kg da carga é 80 no óleo, 120 no eletrônico e 200 na pilha. O teto diário é 5 kg, 10 kg e 1 kg. O nível usa as mesmas faixas do banco.
 
-**IA generativa.** O Geovanne publica o serviço em https://ponte-games-ia-service.onrender.com/api/v1/ia/validar. Na URL publicada, com `PONTEGAMES_IA_PREFERIR_SPRING=true`, o Spring AI lê a foto primeiro, no modelo `gemma4:31b` do Ollama. O serviço do grupo entra se esse modelo não responder. Na máquina local o serviço do grupo vem primeiro e o Ollama `llama3.2` fica de reserva.
+**IA generativa.** O Geovanne publica o serviço em https://ponte-games-ia-service.onrender.com/api/v1/ia/validar. Com `PONTEGAMES_IA_PREFERIR_SPRING=true` ou na máquina local, as duas leituras começam juntas e vale a primeira que responder, no máximo em 16 segundos. O modelo publicado é o `gemma4:31b`. Na máquina local a reserva é o Ollama `llama3.2`.
 
 **Mobile.** O Guilherme consome esta API no app. A base publicada é https://pontegames-api.onrender.com. O contrato do app está na collection `postman/Ponte-Games-API.postman_collection.json`: login, perfil, tipos, ecopontos, descarte com foto e avisos. O header é `Authorization: Bearer`.
 
@@ -148,7 +148,7 @@ A API guarda o arquivo em `FOTOS_DIR` (padrão `dados/fotos`) e devolve `fotoUrl
 
 Sem foto, `parecer` e `mensagemParecer` ficam vazios. Com foto, `parecer` é `COMPATIVEL`, `INCOMPATIVEL` ou `INCONCLUSIVO`.
 
-A imagem segue no campo `foto` para quem analisa, nunca como URL. O serviço de IA do grupo recebe `POST /api/v1/ia/validar`. O endereço padrão é `https://ponte-games-ia-service.onrender.com/api/v1/ia/validar` e troca com `IA_SERVICE_URL`. Cada leitura espera até 60 segundos. Se o serviço responder 502 ou 503, a API espera 15 segundos e tenta de novo, porque o plano gratuito do Render hiberna. Na máquina local a reserva é o Ollama `llama3.2`, em `http://localhost:11434/v1`. Na URL publicada o Spring AI usa o Ollama na nuvem: `OPENAI_BASE_URL` `https://ollama.com/v1`, `OPENAI_MODEL` `gemma4:31b` e a chave em `OPENAI_API_KEY`. Com `PONTEGAMES_IA_PREFERIR_SPRING=true`, o Spring AI roda antes do serviço do grupo. Se os dois caminhos falharem, o descarte é gravado mesmo assim, com parecer inconclusivo e a frase `Não foi possível analisar a foto agora. Envie outra imagem.`
+A imagem segue no campo `foto` para quem analisa, nunca como URL. O serviço de IA do grupo recebe `POST /api/v1/ia/validar`. O endereço padrão é `https://ponte-games-ia-service.onrender.com/api/v1/ia/validar` e troca com `IA_SERVICE_URL`. O download da URL leva no máximo 4 segundos. Cada leitura espera no máximo 16 segundos, e a API fica com a primeira que responder. Não há segunda tentativa: o plano gratuito do serviço de IA pode levar cerca de um minuto para acordar, e segurar o pedido passaria de 25 segundos. Na máquina local a reserva é o Ollama `llama3.2`, em `http://localhost:11434/v1`. Na URL publicada o Spring AI usa o Ollama na nuvem: `OPENAI_BASE_URL` `https://ollama.com/v1`, `OPENAI_MODEL` `gemma4:31b` e a chave em `OPENAI_API_KEY`. Se nenhuma leitura responder a tempo, o descarte é gravado mesmo assim, com parecer inconclusivo e a frase `Não foi possível analisar a foto agora. Envie outra imagem.`
 
 ## Requisito 5 — opção A (RabbitMQ)
 
@@ -199,7 +199,7 @@ OPENAI_MODEL=gemma4:31b
 PONTEGAMES_IA_PREFERIR_SPRING=true
 ```
 
-`gemma4:31b` lê a foto. O nome do modelo usa dois-pontos, não ponto. Com `PONTEGAMES_IA_PREFERIR_SPRING=true`, cada descarte com imagem passa pelo Spring AI antes do serviço do Geovanne. Se o modelo falhar, o serviço do grupo continua como reserva. Não commite a chave. No Render, estas quatro variáveis valem o que está neste bloco. A tabela abaixo é o padrão de quem sobe a API na própria máquina.
+`gemma4:31b` lê a foto. O nome do modelo usa dois-pontos, não ponto. Com `PONTEGAMES_IA_PREFERIR_SPRING=true`, o Spring AI e o serviço do Geovanne leem a foto ao mesmo tempo e vale a primeira resposta, no máximo em 16 segundos. Não commite a chave. No Render, estas quatro variáveis valem o que está neste bloco. A tabela abaixo é o padrão de quem sobe a API na própria máquina.
 
 | Variável | Função | Padrão |
 | --- | --- | --- |

@@ -13,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
@@ -21,19 +20,30 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 
 @Service
 @Profile("!test")
 public class AnalisadorFotoServico implements AnalisadorFoto {
 
 	private static final Logger LOG = LoggerFactory.getLogger(AnalisadorFotoServico.class);
-	private static final Duration ESPERA = Duration.ofSeconds(60);
+	private static final Duration DOWNLOAD = Duration.ofSeconds(4);
+	private static final Duration ESPERA = Duration.ofSeconds(16);
 
 	private final RestClient cliente;
+	private final RestClient download;
 	private final ObjectMapper json;
 	private final String urlServico;
 	private final AnalisadorFotoSpringAi reserva;
 	private final boolean preferirSpring;
+	private final ExecutorService tarefas = Executors.newVirtualThreadPerTaskExecutor();
 
 	public AnalisadorFotoServico(
 			@Value("${pontegames.ia.url}") String urlServico,
@@ -45,14 +55,8 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		this.preferirSpring = preferirSpring;
 		this.json = json;
 		this.reserva = reserva;
-		HttpClient http = HttpClient.newBuilder()
-				.connectTimeout(ESPERA)
-				.followRedirects(HttpClient.Redirect.NORMAL)
-				.build();
-		org.springframework.http.client.JdkClientHttpRequestFactory fabrica =
-				new org.springframework.http.client.JdkClientHttpRequestFactory(http);
-		fabrica.setReadTimeout(ESPERA);
-		this.cliente = RestClient.builder().requestFactory(fabrica).build();
+		this.cliente = clienteHttp(ESPERA);
+		this.download = clienteHttp(DOWNLOAD);
 	}
 
 	@Override
@@ -67,29 +71,7 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		if (fraca != null) {
 			return fraca;
 		}
-		boolean springFalhou = false;
-		if (preferirSpring) {
-			try {
-				return parecerSpring(nomeResiduo, instrucao, imagem, nome(fotoUrl), fotoUrl);
-			} catch (Exception ex) {
-				springFalhou = true;
-				LOG.warn("Spring AI indisponível, usando o serviço do grupo: {}", ex.getMessage());
-			}
-		}
-		try {
-			if (imagem != null && imagem.length > 0) {
-				RespostaServicoIa resposta = consultar(imagem, nome(fotoUrl));
-				if (resposta != null && resposta.valido() != null) {
-					return traduzir(resposta, nomeResiduo);
-				}
-			}
-		} catch (Exception ex) {
-			LOG.warn("Serviço de IA indisponível, usando o Spring AI: {}", ex.getMessage());
-		}
-		if (springFalhou) {
-			throw new IllegalStateException("O Spring AI e o serviço do grupo não analisaram a foto.");
-		}
-		return parecerSpring(nomeResiduo, instrucao, imagem, nome(fotoUrl), fotoUrl);
+		return decidir(nomeResiduo, instrucao, imagem, nome(fotoUrl), fotoUrl);
 	}
 
 	@Override
@@ -98,29 +80,87 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		if (fraca != null) {
 			return fraca;
 		}
-		boolean springFalhou = false;
+		String arquivo = nomeArquivo == null ? "foto.jpg" : nomeArquivo;
+		return decidir(nomeResiduo, instrucao, imagem, arquivo, null);
+	}
+
+	private ParecerFoto decidir(
+			String nomeResiduo,
+			String instrucao,
+			byte[] imagem,
+			String nomeArquivo,
+			String fotoUrl
+	) {
+		boolean temImagem = imagem != null && imagem.length > 0;
+		if (temImagem) {
+			return junto(nomeResiduo, instrucao, imagem, nomeArquivo, fotoUrl);
+		}
 		if (preferirSpring) {
 			try {
-				return reserva.analisar(nomeResiduo, instrucao, imagem, nomeArquivo);
+				return parecerSpring(nomeResiduo, instrucao, imagem, nomeArquivo, fotoUrl);
 			} catch (Exception ex) {
-				springFalhou = true;
-				LOG.warn("Spring AI indisponível, usando o serviço do grupo: {}", ex.getMessage());
+				LOG.warn("Spring AI indisponível: {}", ex.getMessage());
+				throw new IllegalStateException("O Spring AI e o serviço do grupo não analisaram a foto.");
 			}
 		}
+		return parecerSpring(nomeResiduo, instrucao, imagem, nomeArquivo, fotoUrl);
+	}
+
+	private ParecerFoto junto(
+			String nomeResiduo,
+			String instrucao,
+			byte[] imagem,
+			String nomeArquivo,
+			String fotoUrl
+	) {
+		CompletableFuture<ParecerFoto> spring = CompletableFuture.supplyAsync(
+				() -> parecerSpring(nomeResiduo, instrucao, imagem, nomeArquivo, fotoUrl), tarefas);
+		CompletableFuture<ParecerFoto> grupo = CompletableFuture.supplyAsync(
+				() -> parecerGrupo(imagem, nomeArquivo, nomeResiduo), tarefas);
+		CompletableFuture<ParecerFoto> primeiro = new CompletableFuture<>();
+		AtomicInteger falhas = new AtomicInteger();
+		BiConsumer<ParecerFoto, Throwable> aoEncerrar = (parecer, erro) -> {
+			if (erro == null && parecer != null) {
+				primeiro.complete(parecer);
+				return;
+			}
+			if (falhas.incrementAndGet() == 2) {
+				primeiro.completeExceptionally(erro == null
+						? new IllegalStateException("O Spring AI e o serviço do grupo não analisaram a foto.")
+						: erro);
+			}
+		};
+		spring.whenComplete(aoEncerrar);
+		grupo.whenComplete(aoEncerrar);
 		try {
-			if (imagem != null && imagem.length > 0) {
-				RespostaServicoIa resposta = consultar(imagem, nomeArquivo == null ? "foto.jpg" : nomeArquivo);
-				if (resposta != null && resposta.valido() != null) {
-					return traduzir(resposta, nomeResiduo);
-				}
-			}
-		} catch (Exception ex) {
-			LOG.warn("Serviço de IA indisponível, usando o Spring AI: {}", ex.getMessage());
-		}
-		if (springFalhou) {
+			ParecerFoto parecer = primeiro.get(ESPERA.toMillis(), TimeUnit.MILLISECONDS);
+			spring.cancel(true);
+			grupo.cancel(true);
+			return parecer;
+		} catch (TimeoutException ex) {
+			spring.cancel(true);
+			grupo.cancel(true);
+			LOG.warn("Parecer da foto interrompido depois de {} segundos.", ESPERA.toSeconds());
+			throw new IllegalStateException("O parecer da foto passou de " + ESPERA.toSeconds() + " segundos.");
+		} catch (InterruptedException ex) {
+			spring.cancel(true);
+			grupo.cancel(true);
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("A espera pelo parecer foi interrompida.");
+		} catch (ExecutionException ex) {
+			spring.cancel(true);
+			grupo.cancel(true);
+			LOG.warn("Spring AI e o serviço do grupo não analisaram a foto: {}", mensagem(ex));
 			throw new IllegalStateException("O Spring AI e o serviço do grupo não analisaram a foto.");
 		}
-		return reserva.analisar(nomeResiduo, instrucao, imagem, nomeArquivo);
+	}
+
+	private ParecerFoto parecerGrupo(byte[] imagem, String nomeArquivo, String nomeResiduo) {
+		RespostaServicoIa resposta = consultar(imagem, nomeArquivo);
+		if (resposta == null || resposta.valido() == null) {
+			throw new IllegalStateException("O serviço de IA não devolveu um parecer.");
+		}
+		return traduzir(resposta, nomeResiduo);
 	}
 
 	private ParecerFoto parecerSpring(
@@ -133,7 +173,10 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		if (imagem != null && imagem.length > 0) {
 			return reserva.analisar(nomeResiduo, instrucao, imagem, nomeArquivo);
 		}
-		return reserva.analisar(nomeResiduo, instrucao, fotoUrl);
+		if (fotoUrl != null) {
+			return reserva.analisar(nomeResiduo, instrucao, fotoUrl);
+		}
+		return reserva.analisar(nomeResiduo, instrucao, imagem, nomeArquivo);
 	}
 
 	private byte[] baixar(String fotoUrl) {
@@ -141,7 +184,7 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		if (uri == null) {
 			return null;
 		}
-		return cliente.get().uri(uri).retrieve().body(byte[].class);
+		return download.get().uri(uri).retrieve().body(byte[].class);
 	}
 
 	private RespostaServicoIa consultar(byte[] imagem, String nomeArquivo) {
@@ -154,17 +197,7 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 				return nomeArquivo;
 			}
 		}, arquivo));
-		try {
-			return postar(corpo);
-		} catch (RestClientResponseException ex) {
-			int status = ex.getStatusCode().value();
-			if (status != 502 && status != 503) {
-				throw ex;
-			}
-			LOG.warn("Serviço de IA hibernando (HTTP {}). Nova tentativa.", status);
-			esperar();
-			return postar(corpo);
-		}
+		return postar(corpo);
 	}
 
 	private RespostaServicoIa postar(MultiValueMap<String, Object> corpo) {
@@ -205,13 +238,15 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		return new ParecerFoto(ParecerIa.INCOMPATIVEL, motivo);
 	}
 
-	private void esperar() {
-		try {
-			Thread.sleep(Duration.ofSeconds(15));
-		} catch (InterruptedException ex) {
-			Thread.currentThread().interrupt();
-			throw new IllegalStateException("A espera pelo serviço de IA foi interrompida.");
-		}
+	private static RestClient clienteHttp(Duration leitura) {
+		HttpClient http = HttpClient.newBuilder()
+				.connectTimeout(DOWNLOAD)
+				.followRedirects(HttpClient.Redirect.NORMAL)
+				.build();
+		org.springframework.http.client.JdkClientHttpRequestFactory fabrica =
+				new org.springframework.http.client.JdkClientHttpRequestFactory(http);
+		fabrica.setReadTimeout(leitura);
+		return RestClient.builder().requestFactory(fabrica).build();
 	}
 
 	private URI uriHttp(String fotoUrl) {
@@ -242,6 +277,15 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 			return "foto.gif";
 		}
 		return "foto.jpg";
+	}
+
+	private String mensagem(Exception ex) {
+		Throwable causa = ex instanceof ExecutionException && ex.getCause() != null ? ex.getCause() : ex;
+		String texto = causa.getMessage();
+		if (texto == null || texto.isBlank()) {
+			return causa.toString();
+		}
+		return texto;
 	}
 
 	private String texto(String valor) {
