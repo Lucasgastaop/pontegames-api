@@ -5,31 +5,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestClientResponseException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Locale;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
 
 @Service
 @Profile("!test")
@@ -37,16 +24,15 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 
 	private static final Logger LOG = LoggerFactory.getLogger(AnalisadorFotoServico.class);
 	private static final Duration DOWNLOAD = Duration.ofSeconds(8);
-	private static final Duration CONEXAO = Duration.ofSeconds(25);
-	private static final Duration ESPERA = Duration.ofSeconds(65);
+	private static final Duration CONEXAO = Duration.ofSeconds(30);
+	private static final Duration ESPERA = Duration.ofSeconds(80);
+	private static final String LIMITE = "PonteGamesBoundary";
 
-	private final RestClient cliente;
-	private final RestClient download;
+	private final HttpClient http;
 	private final ObjectMapper json;
 	private final String urlServico;
 	private final AnalisadorFotoSpringAi reserva;
 	private final boolean preferirSpring;
-	private final ExecutorService tarefas = Executors.newVirtualThreadPerTaskExecutor();
 
 	public AnalisadorFotoServico(
 			@Value("${pontegames.ia.url}") String urlServico,
@@ -58,18 +44,15 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		this.preferirSpring = preferirSpring;
 		this.json = json;
 		this.reserva = reserva;
-		this.cliente = clienteHttp(CONEXAO, ESPERA);
-		this.download = clienteHttp(DOWNLOAD, DOWNLOAD);
+		this.http = HttpClient.newBuilder()
+				.connectTimeout(CONEXAO)
+				.followRedirects(HttpClient.Redirect.NORMAL)
+				.build();
 	}
 
 	@Override
 	public ParecerFoto analisar(String nomeResiduo, String instrucao, String fotoUrl) {
-		byte[] imagem = null;
-		try {
-			imagem = baixar(fotoUrl);
-		} catch (Exception ex) {
-			LOG.warn("Não foi possível baixar a foto para o parecer: {}", ex.getMessage());
-		}
+		byte[] imagem = baixar(fotoUrl);
 		ParecerFoto fraca = FotoMinima.avaliar(imagem, nomeResiduo);
 		if (fraca != null) {
 			return fraca;
@@ -96,66 +79,20 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 	) {
 		boolean temImagem = imagem != null && imagem.length > 0;
 		if (temImagem) {
-			return junto(nomeResiduo, instrucao, imagem, nomeArquivo, fotoUrl);
-		}
-		if (preferirSpring) {
+			try {
+				return parecerGrupo(imagem, nomeArquivo, nomeResiduo);
+			} catch (RuntimeException ex) {
+				LOG.warn("Serviço de IA indisponível, usando o Spring AI: {}", ex.toString());
+			}
+		} else if (preferirSpring) {
 			try {
 				return parecerSpring(nomeResiduo, instrucao, imagem, nomeArquivo, fotoUrl);
-			} catch (Exception ex) {
-				LOG.warn("Spring AI indisponível: {}", ex.getMessage());
+			} catch (RuntimeException ex) {
+				LOG.warn("Spring AI indisponível: {}", ex.toString());
 				throw new IllegalStateException("O Spring AI e o serviço do grupo não analisaram a foto.");
 			}
 		}
 		return parecerSpring(nomeResiduo, instrucao, imagem, nomeArquivo, fotoUrl);
-	}
-
-	private ParecerFoto junto(
-			String nomeResiduo,
-			String instrucao,
-			byte[] imagem,
-			String nomeArquivo,
-			String fotoUrl
-	) {
-		CompletableFuture<ParecerFoto> spring = CompletableFuture.supplyAsync(
-				() -> parecerSpring(nomeResiduo, instrucao, imagem, nomeArquivo, fotoUrl), tarefas);
-		CompletableFuture<ParecerFoto> grupo = CompletableFuture.supplyAsync(
-				() -> parecerGrupo(imagem, nomeArquivo, nomeResiduo), tarefas);
-		CompletableFuture<ParecerFoto> primeiro = new CompletableFuture<>();
-		AtomicInteger falhas = new AtomicInteger();
-		BiConsumer<ParecerFoto, Throwable> aoEncerrar = (parecer, erro) -> {
-			if (erro == null && parecer != null) {
-				primeiro.complete(parecer);
-				return;
-			}
-			if (falhas.incrementAndGet() == 2) {
-				primeiro.completeExceptionally(erro == null
-						? new IllegalStateException("O Spring AI e o serviço do grupo não analisaram a foto.")
-						: erro);
-			}
-		};
-		spring.whenComplete(aoEncerrar);
-		grupo.whenComplete(aoEncerrar);
-		try {
-			ParecerFoto parecer = primeiro.get(ESPERA.toMillis(), TimeUnit.MILLISECONDS);
-			spring.cancel(true);
-			grupo.cancel(true);
-			return parecer;
-		} catch (TimeoutException ex) {
-			spring.cancel(true);
-			grupo.cancel(true);
-			LOG.warn("Parecer da foto interrompido depois de {} segundos.", ESPERA.toSeconds());
-			throw new IllegalStateException("O parecer da foto passou de " + ESPERA.toSeconds() + " segundos.");
-		} catch (InterruptedException ex) {
-			spring.cancel(true);
-			grupo.cancel(true);
-			Thread.currentThread().interrupt();
-			throw new IllegalStateException("A espera pelo parecer foi interrompida.");
-		} catch (ExecutionException ex) {
-			spring.cancel(true);
-			grupo.cancel(true);
-			LOG.warn("Spring AI e o serviço do grupo não analisaram a foto: {}", mensagem(ex));
-			throw new IllegalStateException("O Spring AI e o serviço do grupo não analisaram a foto.");
-		}
 	}
 
 	private ParecerFoto parecerGrupo(byte[] imagem, String nomeArquivo, String nomeResiduo) {
@@ -187,65 +124,78 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		if (uri == null) {
 			return null;
 		}
-		return download.get().uri(uri).retrieve().body(byte[].class);
+		try {
+			HttpRequest pedido = HttpRequest.newBuilder(uri)
+					.timeout(DOWNLOAD)
+					.header("User-Agent", "PonteGames/1.0")
+					.GET()
+					.build();
+			HttpResponse<byte[]> resposta = http.send(pedido, HttpResponse.BodyHandlers.ofByteArray());
+			if (resposta.statusCode() < 200 || resposta.statusCode() >= 300) {
+				LOG.warn("Download da foto respondeu HTTP {}.", resposta.statusCode());
+				return null;
+			}
+			return resposta.body();
+		} catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			LOG.warn("Download da foto interrompido.");
+			return null;
+		} catch (IOException ex) {
+			LOG.warn("Não foi possível baixar a foto para o parecer: {}", ex.toString());
+			return null;
+		}
 	}
 
 	private RespostaServicoIa consultar(byte[] imagem, String nomeArquivo) {
-		MultiValueMap<String, Object> corpo = new LinkedMultiValueMap<>();
-		HttpHeaders arquivo = new HttpHeaders();
-		arquivo.setContentType(FormatoFoto.png(imagem) ? MediaType.IMAGE_PNG : MediaType.IMAGE_JPEG);
-		corpo.add("foto", new HttpEntity<>(new ByteArrayResource(imagem) {
-			@Override
-			public String getFilename() {
-				return nomeArquivo;
-			}
-		}, arquivo));
-		return postar(corpo, System.nanoTime() + ESPERA.toNanos());
-	}
-
-	private RespostaServicoIa postar(MultiValueMap<String, Object> corpo, long limite) {
+		boolean png = FormatoFoto.png(imagem);
+		String tipo = png ? "image/png" : "image/jpeg";
+		String arquivo = nomeArquivo == null || nomeArquivo.isBlank() ? (png ? "foto.png" : "foto.jpg") : nomeArquivo;
+		byte[] corpo = multipart(imagem, arquivo, tipo);
+		long limite = System.nanoTime() + ESPERA.toNanos();
 		try {
-			return postar(corpo);
-		} catch (RestClientException ex) {
-			if (!valeRepetir(ex) || limite - System.nanoTime() < Duration.ofSeconds(20).toNanos()) {
-				throw ex;
+			return enviar(corpo);
+		} catch (IOException ex) {
+			if (limite - System.nanoTime() < Duration.ofSeconds(25).toNanos()) {
+				throw new IllegalStateException("O serviço de IA não respondeu.", ex);
 			}
-			LOG.warn("Serviço de IA indisponível ({}). Nova tentativa.", ex.getMessage());
+			LOG.warn("Serviço de IA indisponível ({}). Nova tentativa.", ex.toString());
 			esperar(Duration.ofSeconds(5));
-			return postar(corpo);
-		}
-	}
-
-	private boolean valeRepetir(RestClientException ex) {
-		if (ex instanceof RestClientResponseException resposta) {
-			int status = resposta.getStatusCode().value();
-			return status == 502 || status == 503 || status == 504;
-		}
-		return true;
-	}
-
-	private void esperar(Duration pausa) {
-		try {
-			Thread.sleep(pausa);
+			try {
+				return enviar(corpo);
+			} catch (IOException segunda) {
+				throw new IllegalStateException("O serviço de IA não respondeu.", segunda);
+			} catch (InterruptedException segunda) {
+				Thread.currentThread().interrupt();
+				throw new IllegalStateException("A espera pelo serviço de IA foi interrompida.");
+			}
 		} catch (InterruptedException ex) {
 			Thread.currentThread().interrupt();
 			throw new IllegalStateException("A espera pelo serviço de IA foi interrompida.");
 		}
 	}
 
-	private RespostaServicoIa postar(MultiValueMap<String, Object> corpo) {
-		String resposta = cliente.post()
-				.uri(urlServico)
-				.contentType(MediaType.MULTIPART_FORM_DATA)
-				.body(corpo)
-				.retrieve()
-				.body(String.class);
-		if (resposta == null || resposta.isBlank()) {
+	private RespostaServicoIa enviar(byte[] corpo) throws IOException, InterruptedException {
+		HttpRequest pedido = HttpRequest.newBuilder(URI.create(urlServico))
+				.timeout(ESPERA)
+				.header("User-Agent", "PonteGames/1.0")
+				.header("Content-Type", "multipart/form-data; boundary=" + LIMITE)
+				.POST(HttpRequest.BodyPublishers.ofByteArray(corpo))
+				.build();
+		HttpResponse<String> resposta = http.send(pedido, HttpResponse.BodyHandlers.ofString());
+		int status = resposta.statusCode();
+		String texto = resposta.body() == null ? "" : resposta.body();
+		if (status == 502 || status == 503 || status == 504) {
+			throw new IOException("HTTP " + status);
+		}
+		if (status < 200 || status >= 300) {
+			throw new IllegalStateException("Serviço de IA respondeu HTTP " + status + ".");
+		}
+		if (texto.isBlank()) {
 			return null;
 		}
-		JsonNode no = json.readTree(resposta);
+		JsonNode no = json.readTree(texto);
 		if (!no.hasNonNull("valido")) {
-			return null;
+			throw new IllegalStateException("O serviço de IA não devolveu um parecer.");
 		}
 		return new RespostaServicoIa(
 				no.get("valido").asBoolean(),
@@ -253,6 +203,19 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 				texto(no.path("material_detectado").asString(null)),
 				texto(no.path("motivo_rejeicao").asString(null))
 		);
+	}
+
+	private byte[] multipart(byte[] imagem, String nomeArquivo, String tipo) {
+		String nome = nomeArquivo.replace("\"", "");
+		byte[] inicio = ("--" + LIMITE + "\r\n"
+				+ "Content-Disposition: form-data; name=\"foto\"; filename=\"" + nome + "\"\r\n"
+				+ "Content-Type: " + tipo + "\r\n\r\n").getBytes(StandardCharsets.UTF_8);
+		byte[] fim = ("\r\n--" + LIMITE + "--\r\n").getBytes(StandardCharsets.UTF_8);
+		byte[] corpo = new byte[inicio.length + imagem.length + fim.length];
+		System.arraycopy(inicio, 0, corpo, 0, inicio.length);
+		System.arraycopy(imagem, 0, corpo, inicio.length, imagem.length);
+		System.arraycopy(fim, 0, corpo, inicio.length + imagem.length, fim.length);
+		return corpo;
 	}
 
 	private ParecerFoto traduzir(RespostaServicoIa resposta, String nomeResiduo) {
@@ -271,18 +234,13 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		return new ParecerFoto(ParecerIa.INCOMPATIVEL, motivo);
 	}
 
-	private static RestClient clienteHttp(Duration conexao, Duration leitura) {
-		HttpClient http = HttpClient.newBuilder()
-				.connectTimeout(conexao)
-				.followRedirects(HttpClient.Redirect.NORMAL)
-				.build();
-		org.springframework.http.client.JdkClientHttpRequestFactory fabrica =
-				new org.springframework.http.client.JdkClientHttpRequestFactory(http);
-		fabrica.setReadTimeout(leitura);
-		return RestClient.builder()
-				.requestFactory(fabrica)
-				.defaultHeader(HttpHeaders.USER_AGENT, "PonteGames/1.0")
-				.build();
+	private void esperar(Duration pausa) {
+		try {
+			Thread.sleep(pausa);
+		} catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			throw new IllegalStateException("A espera pelo serviço de IA foi interrompida.");
+		}
 	}
 
 	private URI uriHttp(String fotoUrl) {
@@ -313,15 +271,6 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 			return "foto.gif";
 		}
 		return "foto.jpg";
-	}
-
-	private String mensagem(Exception ex) {
-		Throwable causa = ex instanceof ExecutionException && ex.getCause() != null ? ex.getCause() : ex;
-		String texto = causa.getMessage();
-		if (texto == null || texto.isBlank()) {
-			return causa.toString();
-		}
-		return texto;
 	}
 
 	private String texto(String valor) {
