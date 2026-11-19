@@ -67,10 +67,12 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		if (fraca != null) {
 			return fraca;
 		}
+		boolean springFalhou = false;
 		if (preferirSpring) {
 			try {
 				return parecerSpring(nomeResiduo, instrucao, imagem, nome(fotoUrl), fotoUrl);
 			} catch (RuntimeException ex) {
+				springFalhou = true;
 				LOG.warn("Spring AI indisponível, usando o serviço do grupo: {}", ex.getMessage());
 			}
 		}
@@ -84,6 +86,9 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		} catch (RuntimeException ex) {
 			LOG.warn("Serviço de IA indisponível, usando o Spring AI: {}", ex.getMessage());
 		}
+		if (springFalhou) {
+			throw new IllegalStateException("O Spring AI e o serviço do grupo não analisaram a foto.");
+		}
 		return parecerSpring(nomeResiduo, instrucao, imagem, nome(fotoUrl), fotoUrl);
 	}
 
@@ -93,10 +98,12 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		if (fraca != null) {
 			return fraca;
 		}
+		boolean springFalhou = false;
 		if (preferirSpring) {
 			try {
 				return reserva.analisar(nomeResiduo, instrucao, imagem, nomeArquivo);
 			} catch (RuntimeException ex) {
+				springFalhou = true;
 				LOG.warn("Spring AI indisponível, usando o serviço do grupo: {}", ex.getMessage());
 			}
 		}
@@ -109,6 +116,9 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 			}
 		} catch (RuntimeException ex) {
 			LOG.warn("Serviço de IA indisponível, usando o Spring AI: {}", ex.getMessage());
+		}
+		if (springFalhou) {
+			throw new IllegalStateException("O Spring AI e o serviço do grupo não analisaram a foto.");
 		}
 		return reserva.analisar(nomeResiduo, instrucao, imagem, nomeArquivo);
 	}
