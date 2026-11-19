@@ -82,7 +82,7 @@ class RegrasDescarteApiTest {
 		mockMvc.perform(get("/api/descartes/" + descarteId).header("Authorization", "Bearer " + tokenCidadao))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status").value("PENDENTE"))
-				.andExpect(jsonPath("$.xpGanho").value(160));
+				.andExpect(jsonPath("$.xpGanho").value(0));
 		mockMvc.perform(get("/api/usuarios/me").header("Authorization", "Bearer " + tokenCidadao))
 				.andExpect(jsonPath("$.xpTotal").value(0))
 				.andExpect(jsonPath("$.nivel").value(1));

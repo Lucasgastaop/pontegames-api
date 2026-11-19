@@ -8,7 +8,7 @@ Swagger publicado: https://pontegames-api.onrender.com/swagger-ui.html
 
 Repositório: https://github.com/Lucasgastaop/pontegames-api
 
-Esta é a API que o app Mobile consome. O modelo JPA usa as tabelas Oracle da entrega de database. A API sobe com `ddl-auto: none` e o que a entrega de database não tinha entra pelos scripts de `db/`. O CRUD é paginado, com validação, erro padronizado e login JWT. A foto é enviada primeiro ao serviço de IA do grupo, que devolve se ela combina com o resíduo. Essa leitura espera até 80 segundos, porque a instância gratuita pode levar cerca de um minuto para acordar. Se ela não responder, o Spring AI entra como reserva. O resultado da validação sai por RabbitMQ e vira aviso do cidadão.
+Esta é a API que o app Mobile consome. O modelo JPA usa as tabelas Oracle da entrega de database. A API sobe com `ddl-auto: none` e o que a entrega de database não tinha entra pelos scripts de `db/`. O CRUD é paginado, com validação, erro padronizado e login JWT. A foto é enviada primeiro ao serviço de IA do grupo, que devolve se ela combina com o resíduo. A API espera essa resposta, sem cortar no relógio, porque a instância gratuita pode levar cerca de um minuto para acordar. Se ela não responder, o Spring AI entra como reserva. O resultado da validação sai por RabbitMQ e vira aviso do cidadão.
 
 ## Grupo
 
@@ -55,7 +55,7 @@ A mesma CitizenTech atravessa o grupo. Este repositório é a parte de Java.
 
 **Database.** As tabelas `tb_pg_usuario`, `tb_pg_ponto_coleta`, `tb_pg_tipo_residuo` e `tb_pg_descarte` vêm da entrega relacional. Os gatilhos `TRG_PG_REGRAS_DESCARTE` e `TRG_PG_CREDITAR_XP` continuam donos da trava e do saldo no Oracle. A API acrescenta só o que essa entrega não tinha, pelos scripts `db/oracle-senha.sql`, `db/oracle-parecer.sql` e `db/oracle-notificacao.sql`: senha, parecer da foto e aviso. O XP por kg da carga é 80 no óleo, 120 no eletrônico e 200 na pilha. O teto diário é 5 kg, 10 kg e 1 kg. O nível usa as mesmas faixas do banco.
 
-**IA generativa.** O Geovanne publica o serviço em https://ponte-games-ia-service.onrender.com/api/v1/ia/validar. A foto segue primeiro para o serviço do grupo, com até 80 segundos de espera. Se ele não responder, o Spring AI lê a mesma imagem. O modelo publicado é o `gemma4:31b`. Na máquina local a reserva é o Ollama `llama3.2`.
+**IA generativa.** O Geovanne publica o serviço em https://ponte-games-ia-service.onrender.com/api/v1/ia/validar. A foto segue primeiro para o serviço do grupo, e a API espera o parecer sem limite de tempo. Se ele não responder, o Spring AI lê a mesma imagem. O modelo publicado é o `gemma4:31b`. Na máquina local a reserva é o Ollama `llama3.2`.
 
 **Mobile.** O Guilherme consome esta API no app. A base publicada é https://pontegames-api.onrender.com. O contrato do app está na collection `postman/Ponte-Games-API.postman_collection.json`: login, perfil, tipos, ecopontos, descarte com foto e avisos. O header é `Authorization: Bearer`.
 
@@ -112,7 +112,7 @@ Fora o status, o cadastro, o login e o Swagger, toda rota exige `Authorization: 
 
 O corpo JSON leva `usuarioId`, `pontoId`, `tipoResiduoId`, `pesoKg` e, se houver, `fotoUrl`. O `usuarioId` do cidadão tem de ser o do token. O peso é maior que zero, com no máximo 4 dígitos inteiros e 2 decimais. `fotoUrl` cabe em 500 caracteres.
 
-O XP da missão é peso vezes XP por kg, com duas casas. Ele aparece em `xpGanho` na hora do registro. Foto `COMPATIVEL` grava o descarte como `VALIDADO_IA` e o XP entra no saldo na mesma resposta. Foto `INCOMPATIVEL` grava `REJEITADO` e o saldo não muda. Sem foto, ou com parecer `INCONCLUSIVO`, o descarte fica `PENDENTE`. Nesse caso uma gestora ou um admin ainda pode enviar:
+O XP da missão é peso vezes XP por kg, com duas casas, e só entra no saldo quando o status fica `VALIDADO_IA`. Enquanto está `PENDENTE` ou `REJEITADO`, `xpGanho` volta `0`. Foto `COMPATIVEL` grava o descarte como `VALIDADO_IA` e o XP entra na mesma resposta. Foto `INCOMPATIVEL` grava `REJEITADO`, sem XP. Sem foto, ou com parecer `INCONCLUSIVO`, o descarte fica `PENDENTE`, também sem XP. Nesse caso uma gestora ou um admin ainda pode enviar:
 
 ```json
 {"status":"VALIDADO_IA"}
@@ -148,7 +148,7 @@ A API guarda o arquivo em `FOTOS_DIR` (padrão `dados/fotos`) e devolve `fotoUrl
 
 Sem foto, `parecer` e `mensagemParecer` ficam vazios. Com foto, `parecer` é `COMPATIVEL`, `INCOMPATIVEL` ou `INCONCLUSIVO`.
 
-A imagem segue no campo `foto` para quem analisa, nunca como URL. O serviço de IA do grupo recebe `POST /api/v1/ia/validar`. O endereço padrão é `https://ponte-games-ia-service.onrender.com/api/v1/ia/validar` e troca com `IA_SERVICE_URL`. O download da URL leva no máximo 8 segundos. O serviço do grupo recebe a imagem em `multipart/form-data`, no campo `foto`, e espera até 80 segundos. Se a conexão cair ou a resposta for 502, 503 ou 504 e ainda houver tempo, a API espera 5 segundos e tenta de novo. O Spring AI só é chamado se o serviço do grupo não devolver o parecer. Na máquina local a reserva é o Ollama `llama3.2`, em `http://localhost:11434/v1`. Na URL publicada o Spring AI usa o Ollama na nuvem: `OPENAI_BASE_URL` `https://ollama.com/v1`, `OPENAI_MODEL` `gemma4:31b` e a chave em `OPENAI_API_KEY`. Se nenhuma leitura responder a tempo, o descarte é gravado mesmo assim, com parecer inconclusivo e a frase `Não foi possível analisar a foto agora. Envie outra imagem.`
+A imagem segue no campo `foto` para quem analisa, nunca como URL. O serviço de IA do grupo recebe `POST /api/v1/ia/validar`. O endereço padrão é `https://ponte-games-ia-service.onrender.com/api/v1/ia/validar` e troca com `IA_SERVICE_URL`. O download da URL leva no máximo 8 segundos. O serviço do grupo recebe a imagem em `multipart/form-data`, no campo `foto`, e a API espera o parecer sem cortar no relógio. Se a conexão cair ou a resposta for 502, 503 ou 504, a API espera 5 segundos e tenta de novo. O Spring AI só é chamado se o serviço do grupo não devolver o parecer. Na máquina local a reserva é o Ollama `llama3.2`, em `http://localhost:11434/v1`. Na URL publicada o Spring AI usa o Ollama na nuvem: `OPENAI_BASE_URL` `https://ollama.com/v1`, `OPENAI_MODEL` `gemma4:31b` e a chave em `OPENAI_API_KEY`. Se nenhuma leitura responder a tempo, o descarte é gravado mesmo assim, com parecer inconclusivo e a frase `Não foi possível analisar a foto agora. Envie outra imagem.`
 
 ## Requisito 5 — opção A (RabbitMQ)
 
@@ -199,7 +199,7 @@ OPENAI_MODEL=gemma4:31b
 PONTEGAMES_IA_PREFERIR_SPRING=false
 ```
 
-`gemma4:31b` fica de reserva. O nome do modelo usa dois-pontos, não ponto. Com a foto em mãos, o serviço do Geovanne é o primeiro e tem até 80 segundos. Se ele não responder, o Spring AI lê a mesma imagem. `PONTEGAMES_IA_PREFERIR_SPRING` não troca essa ordem. Não commite a chave. A tabela mostra o Oracle da FIAP. As outras linhas são o padrão de quem sobe a API na própria máquina.
+`gemma4:31b` fica de reserva. O nome do modelo usa dois-pontos, não ponto. Com a foto em mãos, o serviço do Geovanne é o primeiro e a API espera o parecer dele sem limite de tempo. Se ele não responder, o Spring AI lê a mesma imagem. `PONTEGAMES_IA_PREFERIR_SPRING` não troca essa ordem. Não commite a chave. A tabela mostra o Oracle da FIAP. As outras linhas são o padrão de quem sobe a API na própria máquina.
 
 | Variável | Função | Padrão |
 | --- | --- | --- |

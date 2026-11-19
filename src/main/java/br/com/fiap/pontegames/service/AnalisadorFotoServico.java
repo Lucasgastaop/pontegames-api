@@ -24,8 +24,7 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 
 	private static final Logger LOG = LoggerFactory.getLogger(AnalisadorFotoServico.class);
 	private static final Duration DOWNLOAD = Duration.ofSeconds(8);
-	private static final Duration CONEXAO = Duration.ofSeconds(30);
-	private static final Duration ESPERA = Duration.ofSeconds(80);
+	private static final Duration CONEXAO = Duration.ofMinutes(3);
 	private static final String LIMITE = "PonteGamesBoundary";
 
 	private final HttpClient http;
@@ -151,13 +150,9 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 		String tipo = png ? "image/png" : "image/jpeg";
 		String arquivo = nomeArquivo == null || nomeArquivo.isBlank() ? (png ? "foto.png" : "foto.jpg") : nomeArquivo;
 		byte[] corpo = multipart(imagem, arquivo, tipo);
-		long limite = System.nanoTime() + ESPERA.toNanos();
 		try {
 			return enviar(corpo);
 		} catch (IOException ex) {
-			if (limite - System.nanoTime() < Duration.ofSeconds(25).toNanos()) {
-				throw new IllegalStateException("O serviço de IA não respondeu.", ex);
-			}
 			LOG.warn("Serviço de IA indisponível ({}). Nova tentativa.", ex.toString());
 			esperar(Duration.ofSeconds(5));
 			try {
@@ -176,7 +171,6 @@ public class AnalisadorFotoServico implements AnalisadorFoto {
 
 	private RespostaServicoIa enviar(byte[] corpo) throws IOException, InterruptedException {
 		HttpRequest pedido = HttpRequest.newBuilder(URI.create(urlServico))
-				.timeout(ESPERA)
 				.header("User-Agent", "PonteGames/1.0")
 				.header("Content-Type", "multipart/form-data; boundary=" + LIMITE)
 				.POST(HttpRequest.BodyPublishers.ofByteArray(corpo))

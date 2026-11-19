@@ -98,7 +98,7 @@ class CrudApiTest {
 				.andExpect(jsonPath("$.nomePonto").value("Ecoponto Vila Mariana"))
 				.andExpect(jsonPath("$.nomeResiduo").value("Oleo de Cozinha"))
 				.andExpect(jsonPath("$.status").value("PENDENTE"))
-				.andExpect(jsonPath("$.xpGanho").value(160))
+				.andExpect(jsonPath("$.xpGanho").value(0))
 				.andExpect(jsonPath("$.dataDescarte").isNotEmpty());
 
 		comoAdmin(put("/api/descartes/" + descarteId)
@@ -109,7 +109,7 @@ class CrudApiTest {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.pesoKg").value(1.5))
 				.andExpect(jsonPath("$.status").value("PENDENTE"))
-				.andExpect(jsonPath("$.xpGanho").value(120));
+				.andExpect(jsonPath("$.xpGanho").value(0));
 
 		comoAdmin(put("/api/usuarios/" + usuarioId)
 						.contentType(MediaType.APPLICATION_JSON)

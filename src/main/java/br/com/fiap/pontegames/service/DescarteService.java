@@ -446,7 +446,7 @@ public class DescarteService {
 				descarte.getTipoResiduo().getId(),
 				descarte.getTipoResiduo().getNome(),
 				descarte.getPesoKg(),
-				descarte.getXpGanho(),
+				descarte.getStatus() == StatusValidacao.VALIDADO_IA ? descarte.getXpGanho() : BigDecimal.ZERO,
 				descarte.getFotoUrl(),
 				descarte.getParecer(),
 				descarte.getMensagemParecer(),
